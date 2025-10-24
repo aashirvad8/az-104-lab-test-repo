@@ -11,10 +11,12 @@ variable "resource_group_name" {
 variable "admin_username" {
   description = "Admin username for the VM"
   type        = string
+  default = "AzuerAdmin"
 }
 
 variable "admin_password" {
   description = "Admin password for the VM"
   type        = string
+  default = "Admin@12345"
   sensitive   = true
 }
