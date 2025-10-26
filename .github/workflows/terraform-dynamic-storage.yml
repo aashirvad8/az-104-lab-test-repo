@@ -25,104 +25,62 @@ env:
 
 jobs:
   terraform:
-    name: "Terraform Action"
     runs-on: ubuntu-latest
-
     defaults:
       run:
         working-directory: ./terraform-resources
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Azure Login using OIDC
-        uses: azure/login@v2
+      - uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
 
-      - name: Prepare Terraform Backend
-        run: |
-          BACKEND_RG="tfstate-rg"
-          BACKEND_STORAGE="tfstatejayesh4890patil1" # storage account must be globally unique
-          BACKEND_CONTAINER="tfstate"
-          LOCATION="eastus2"
-
-          # Check if RG exists
-          RG_EXISTS=$(az group exists --name $BACKEND_RG)
-          if [ "$RG_EXISTS" = "false" ]; then
-            echo "Creating resource group $BACKEND_RG in $LOCATION"
-            az group create --name $BACKEND_RG --location $LOCATION
-          else
-            echo "Resource group $BACKEND_RG already exists."
-            LOCATION=$(az group show --name $BACKEND_RG --query location -o tsv)
-          fi
-
-          # Check if storage account exists
-          STORAGE_EXISTS=$(az storage account check-name --name $BACKEND_STORAGE --query 'nameAvailable' -o tsv)
-          if [ "$STORAGE_EXISTS" = "true" ]; then
-            az storage account create \
-              --name $BACKEND_STORAGE \
-              --resource-group $BACKEND_RG \
-              --location $LOCATION \
-              --sku Standard_LRS \
-              --kind StorageV2 \
-              --encryption-services blob
-          else
-            echo "Storage account $BACKEND_STORAGE already exists."
-          fi
-
-          # Get storage key
-          ACCOUNT_KEY=$(az storage account keys list \
-            --resource-group $BACKEND_RG \
-            --account-name $BACKEND_STORAGE \
-            --query "[0].value" -o tsv)
-
-          # Create container if not exists
-          az storage container create \
-            --name $BACKEND_CONTAINER \
-            --account-name $BACKEND_STORAGE \
-            --account-key $ACCOUNT_KEY || echo "Container exists"
-
-          # Write backend.tf only if it doesn't exist
-          if [ ! -f backend.tf ]; then
-            cat > backend.tf <<EOL
-                terraform {
-                    backend "azurerm" {
-                        resource_group_name  = "$BACKEND_RG"
-                        storage_account_name = "$BACKEND_STORAGE"
-                        container_name       = "$BACKEND_CONTAINER"
-                        key                  = "terraform.tfstate"
-                        }
-            }
-            EOL
-          fi
-
-      - name: Terraform Init
+      # Step 1: Bootstrap apply to create backend
+      - name: Terraform Init (Bootstrap Local Backend)
         run: terraform init
 
-      - name: Terraform Validate (only for apply)
+      - name: Terraform Apply Backend Storage
+        run: terraform apply -auto-approve \
+          -var="backend_rg_name=tfstate-rg" \
+          -var="backend_sa_name=tfstatejayesh4890patil1" \
+          -var="backend_container_name=tfstate"
+
+      # Step 2: Re-init with Remote Backend
+      - name: Terraform Init (Remote Backend)
+        run: |
+          cat > backend.tf <<EOL
+            terraform {
+            backend "azurerm" {
+            resource_group_name  = "tfstate-rg"
+            storage_account_name = "tfstatejayesh4890patil1"
+            container_name       = "tfstate"
+            key                  = "terraform.tfstate"
+                            }
+                    }
+                EOL
+          terraform init -reconfigure
+
+      - name: Terraform Validate (only apply)
         if: ${{ github.event.inputs.action == 'apply' }}
         run: terraform validate
 
       - name: Terraform Plan / Apply / Destroy
         run: |
           if [ "${{ github.event.inputs.action }}" == "apply" ]; then
-            echo "✅ Applying Terraform..."
             terraform plan -out=tfplan
             terraform apply -auto-approve tfplan
           elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
-            echo "⚠️ Destroying Terraform resources..."
             terraform plan -destroy -out=tfplan
             terraform destroy -auto-approve
           else
-            echo "❌ Invalid action selected: ${{ github.event.inputs.action }}"
+            echo "Invalid action"
             exit 1
           fi

@@ -2,6 +2,9 @@
 variable "subscription_id" { type = string }
 variable "location" { type = string }
 variable "rg_Name" { type = string }
+variable "backend_rg_name" { type = string }
+variable "backend_sa_name" { type = string }
+variable "backend_container_name" { type = string }
 
 ### VNET Module Variables Start ###
 variable "vnet_Name" { type = string }
