@@ -1,10 +1,10 @@
-name: "Terraform Apply / Destroy with Dynamic Backend"
+name: "Terraform Apply / Destroy"
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Terraform action"
+        description: "Select Terraform action"
         required: true
         default: "apply"
         type: choice
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./resources
+        working-directory: ./terraform-resources
 
     steps:
       - uses: actions/checkout@v4
@@ -43,7 +43,7 @@ jobs:
         with:
           terraform_version: 1.9.5
 
-      - name: Terraform Init (Local Backend)
+      - name: Terraform Init (Bootstrap Local Backend)
         run: terraform init
 
       - name: Terraform Apply Backend Storage
@@ -55,7 +55,7 @@ jobs:
             terraform {
             backend "azurerm" {
             resource_group_name  = "tfstate-rg"
-            storage_account_name = "${{ github.run_id }}sa"   # dynamically unique name
+            storage_account_name = "tfstatejayesh4890patil1"
             container_name       = "tfstate"
             key                  = "terraform.tfstate"
                             }
