@@ -7,7 +7,7 @@ on:
   pull_request:
 
 permissions:
-  id-token: write
+  id-token: write   # required for OIDC
   contents: read
 
 env:
@@ -30,12 +30,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Azure Login (OIDC)
+      - name: Azure Login using OIDC
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: false  # needed for Terraform
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -44,6 +42,7 @@ jobs:
 
       - name: Terraform Init
         run: terraform init
+        # No backend config here, terraform reads backend.tf automatically
 
       - name: Terraform Validate
         run: terraform validate
