@@ -94,15 +94,15 @@ jobs:
           # Write backend.tf only if it doesn't exist
           if [ ! -f backend.tf ]; then
             cat > backend.tf <<EOL
-terraform {
-  backend "azurerm" {
-    resource_group_name  = "$BACKEND_RG"
-    storage_account_name = "$BACKEND_STORAGE"
-    container_name       = "$BACKEND_CONTAINER"
-    key                  = "terraform.tfstate"
-  }
-}
-EOL
+                terraform {
+                    backend "azurerm" {
+                        resource_group_name  = "$BACKEND_RG"
+                        storage_account_name = "$BACKEND_STORAGE"
+                        container_name       = "$BACKEND_CONTAINER"
+                        key                  = "terraform.tfstate"
+                        }
+            }
+            EOL
           fi
 
       - name: Terraform Init
