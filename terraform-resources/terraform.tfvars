@@ -1,0 +1,25 @@
+subscription_id = "d0866d00-eb92-4775-bfeb-d6fc94acd94e"
+
+## VNET - SUBNET
+rg_Name            = "Demo-Test"
+location           = "eastus2"
+vnet_Name          = "vnet-terraform-modulesdev-eus2"
+vnet_Address       = "178.29.192.0/20"
+subnet_NameList    = ["snet-aks-terraform-modulesdev-eus2", "snet-agw-terraform-modulesdev-eus2", "snet-shared-terraform-modulesdev-eus2", "snet-vm-terraform-modulesdev-eus2", "GatewaySubnet"]
+subnet_AddressList = ["178.29.192.0/26", "178.29.192.64/26", "178.29.192.128/26", "178.29.192.192/26", "178.29.193.0/26"]
+vm_pip                 = "public_ip_win"
+pip_allocation         = "Dynamic"
+vm_nic                 = "win_vm_nic"
+ip_configuration       = "ip_config"
+
+### Windows Virtual Machine Deployment
+vm_name                = "win-terra-vm"
+vm_size                = "Standard_B2s"
+vm_username            = "AdminUser"
+vm_password            = "Admin@12356"
+vm_image_publisher     = "MicrosoftWindowsServer"
+vm_image_offer         = "WindowsServer"
+vm_image_sku           = "2016-Datacenter"
+vm_image_version       = "latest"
+vm_os_disk_strg_type   = "Standard_LRS"
+vm_os_disk_caching     = "ReadWrite"
