@@ -1,5 +1,3 @@
-# .github/workflows/terraform-manual.yml
-
 name: "Terraform Apply / Destroy"
 
 on:
@@ -50,13 +48,49 @@ jobs:
         with:
           terraform_version: 1.9.5
 
-      - name: Terraform Init
-        run: terraform init
+      - name: Create Storage Account & Container for Terraform Backend
+        run: |
+          # Variables
+          BACKEND_RG="tfstate-rg"
+          BACKEND_STORAGE="tfstate${{ github.run_id }}"
+          BACKEND_CONTAINER="tfstate"
+          LOCATION="eastus2"
+
+          # Create resource group if not exists
+          az group create --name $BACKEND_RG --location $LOCATION
+
+          # Create storage account (ignore if exists)
+          az storage account create \
+            --name $BACKEND_STORAGE \
+            --resource-group $BACKEND_RG \
+            --sku Standard_LRS \
+            --encryption-services blob || echo "Storage account exists"
+
+          # Get storage account key
+          export TF_STORAGE_KEY=$(az storage account keys list \
+            --resource-group $BACKEND_RG \
+            --account-name $BACKEND_STORAGE \
+            --query '[0].value' -o tsv)
+
+          # Create container if not exists
+          az storage container create \
+            --name $BACKEND_CONTAINER \
+            --account-name $BACKEND_STORAGE \
+            --account-key $TF_STORAGE_KEY || echo "Container exists"
+
+      - name: Terraform Init with Dynamic Backend
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=tfstate-rg" \
+            -backend-config="storage_account_name=tfstate${{ github.run_id }}" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=terraform.tfstate"
 
       - name: Terraform Validate
+        if: ${{ github.event.inputs.action == 'apply' }}
         run: terraform validate
 
-      - name: Terraform Plan / Destroy Logic
+      - name: Terraform Plan / Destroy
         run: |
           if [ "${{ github.event.inputs.action }}" == "apply" ]; then
             echo "✅ Applying Terraform..."
