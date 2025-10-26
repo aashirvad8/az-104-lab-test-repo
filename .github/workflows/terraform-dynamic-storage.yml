@@ -1,4 +1,4 @@
-name: "Terraform Apply / Destroy with Dynamic Backend"
+name: "Terraform Apply / Destroy"
 
 on:
   workflow_dispatch:
@@ -55,8 +55,16 @@ jobs:
           BACKEND_CONTAINER="tfstate"
           LOCATION="eastus2"
 
-          # Create RG if it doesn't exist
-          az group create --name $BACKEND_RG --location $LOCATION
+          # Check if RG exists
+          RG_EXISTS=$(az group exists --name $BACKEND_RG)
+          if [ "$RG_EXISTS" = "false" ]; then
+            echo "Creating resource group $BACKEND_RG in $LOCATION"
+            az group create --name $BACKEND_RG --location $LOCATION
+          else
+            echo "Resource group $BACKEND_RG already exists. Skipping creation."
+            # Get existing location for storage account creation
+            LOCATION=$(az group show --name $BACKEND_RG --query location -o tsv)
+          fi
 
           # Create Storage Account if not exists
           az storage account create \
@@ -97,7 +105,7 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-      - name: Terraform Plan / Apply / Destroy
+      - name: Terraform Plan / Destroy Logic
         run: |
           if [ "${{ github.event.inputs.action }}" == "apply" ]; then
             echo "✅ Applying Terraform..."
