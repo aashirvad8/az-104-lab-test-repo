@@ -13,10 +13,6 @@ on:
         options:
           - apply
           - destroy
-      confirm_destroy:
-        description: "Type 'yes' to confirm Terraform destroy"
-        required: false
-        default: "no"
 
 permissions:
   id-token: write
@@ -67,10 +63,6 @@ jobs:
             terraform plan -out=tfplan
             terraform apply -auto-approve tfplan
           elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
-            if [ "${{ github.event.inputs.confirm_destroy }}" != "yes" ]; then
-              echo "❌ Destroy not confirmed. Type 'yes' to confirm."
-              exit 1
-            fi
             echo "⚠️ Destroying Terraform resources..."
             terraform plan -destroy -out=tfplan
             terraform destroy -auto-approve
