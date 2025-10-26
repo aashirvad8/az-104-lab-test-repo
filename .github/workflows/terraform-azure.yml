@@ -7,14 +7,11 @@ on:
   pull_request:
 
 permissions:
-  id-token: write   # required for OIDC
+  id-token: write
   contents: read
 
 env:
   ARM_USE_OIDC: true
-  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   TF_IN_AUTOMATION: true
 
 jobs:
@@ -33,7 +30,8 @@ jobs:
       - name: Azure Login using OIDC
         uses: azure/login@v2
         with:
-          enable-AzPSSession: false  # needed for Terraform
+          enable-AzPSSession: false  # optional, disables PowerShell session
+          environment: azurecloud
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -42,7 +40,6 @@ jobs:
 
       - name: Terraform Init
         run: terraform init
-        # No backend config here, terraform reads backend.tf automatically
 
       - name: Terraform Validate
         run: terraform validate
