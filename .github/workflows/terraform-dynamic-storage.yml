@@ -1,10 +1,10 @@
-name: "Terraform Apply / Destroy"
+name: "Terraform Apply / Destroy with Dynamic Backend"
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Select Terraform action"
+        description: "Terraform action"
         required: true
         default: "apply"
         type: choice
@@ -43,34 +43,25 @@ jobs:
         with:
           terraform_version: 1.9.5
 
-      # Step 1: Bootstrap apply to create backend
-      - name: Terraform Init (Bootstrap Local Backend)
+      - name: Terraform Init (Local Backend)
         run: terraform init
 
       - name: Terraform Apply Backend Storage
-        run: terraform apply -auto-approve \
-          -var="backend_rg_name=tfstate-rg" \
-          -var="backend_sa_name=tfstatejayesh4890patil1" \
-          -var="backend_container_name=tfstate"
+        run: terraform apply -auto-approve
 
-      # Step 2: Re-init with Remote Backend
       - name: Terraform Init (Remote Backend)
         run: |
           cat > backend.tf <<EOL
             terraform {
             backend "azurerm" {
             resource_group_name  = "tfstate-rg"
-            storage_account_name = "tfstatejayesh4890patil1"
+            storage_account_name = "${{ github.run_id }}sa"   # dynamically unique name
             container_name       = "tfstate"
             key                  = "terraform.tfstate"
                             }
                     }
-                EOL
+            EOL
           terraform init -reconfigure
-
-      - name: Terraform Validate (only apply)
-        if: ${{ github.event.inputs.action == 'apply' }}
-        run: terraform validate
 
       - name: Terraform Plan / Apply / Destroy
         run: |
