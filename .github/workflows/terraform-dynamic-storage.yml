@@ -1,4 +1,4 @@
-name: "Terraform Apply / Destroy"
+name: "Terraform Apply / Destroy with Dynamic Backend"
 
 on:
   workflow_dispatch:
@@ -48,49 +48,56 @@ jobs:
         with:
           terraform_version: 1.9.5
 
-      - name: Create Storage Account & Container for Terraform Backend
+      - name: Prepare Terraform Backend
         run: |
-          # Variables
           BACKEND_RG="tfstate-rg"
           BACKEND_STORAGE="tfstate${{ github.run_id }}"
           BACKEND_CONTAINER="tfstate"
           LOCATION="eastus2"
 
-          # Create resource group if not exists
+          # Create RG if it doesn't exist
           az group create --name $BACKEND_RG --location $LOCATION
 
-          # Create storage account (ignore if exists)
+          # Create Storage Account if not exists
           az storage account create \
             --name $BACKEND_STORAGE \
             --resource-group $BACKEND_RG \
+            --location $LOCATION \
             --sku Standard_LRS \
+            --kind StorageV2 \
             --encryption-services blob || echo "Storage account exists"
 
-          # Get storage account key
-          export TF_STORAGE_KEY=$(az storage account keys list \
+          # Get Storage Account Key
+          ACCOUNT_KEY=$(az storage account keys list \
             --resource-group $BACKEND_RG \
             --account-name $BACKEND_STORAGE \
-            --query '[0].value' -o tsv)
+            --query "[0].value" -o tsv)
 
           # Create container if not exists
           az storage container create \
             --name $BACKEND_CONTAINER \
             --account-name $BACKEND_STORAGE \
-            --account-key $TF_STORAGE_KEY || echo "Container exists"
+            --account-key $ACCOUNT_KEY || echo "Container exists"
 
-      - name: Terraform Init with Dynamic Backend
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=tfstate-rg" \
-            -backend-config="storage_account_name=tfstate${{ github.run_id }}" \
-            -backend-config="container_name=tfstate" \
-            -backend-config="key=terraform.tfstate"
+          # Write dynamic backend.tf
+          cat > backend.tf <<EOL
+          terraform {
+            backend "azurerm" {
+              resource_group_name  = "$BACKEND_RG"
+              storage_account_name = "$BACKEND_STORAGE"
+              container_name       = "$BACKEND_CONTAINER"
+              key                  = "terraform.tfstate"
+            }
+          }
+          EOL
+
+      - name: Terraform Init
+        run: terraform init
 
       - name: Terraform Validate
-        if: ${{ github.event.inputs.action == 'apply' }}
         run: terraform validate
 
-      - name: Terraform Plan / Destroy
+      - name: Terraform Plan / Apply / Destroy
         run: |
           if [ "${{ github.event.inputs.action }}" == "apply" ]; then
             echo "✅ Applying Terraform..."
