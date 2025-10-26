@@ -51,7 +51,7 @@ jobs:
       - name: Prepare Terraform Backend
         run: |
           BACKEND_RG="tfstate-rg"
-          BACKEND_STORAGE="tfstate${{ github.run_id }}"
+          BACKEND_STORAGE="tfstatejayesh4890patil1" # storage account must be globally unique
           BACKEND_CONTAINER="tfstate"
           LOCATION="eastus2"
 
@@ -61,21 +61,25 @@ jobs:
             echo "Creating resource group $BACKEND_RG in $LOCATION"
             az group create --name $BACKEND_RG --location $LOCATION
           else
-            echo "Resource group $BACKEND_RG already exists. Skipping creation."
-            # Get existing location for storage account creation
+            echo "Resource group $BACKEND_RG already exists."
             LOCATION=$(az group show --name $BACKEND_RG --query location -o tsv)
           fi
 
-          # Create Storage Account if not exists
-          az storage account create \
-            --name $BACKEND_STORAGE \
-            --resource-group $BACKEND_RG \
-            --location $LOCATION \
-            --sku Standard_LRS \
-            --kind StorageV2 \
-            --encryption-services blob || echo "Storage account exists"
+          # Check if storage account exists
+          STORAGE_EXISTS=$(az storage account check-name --name $BACKEND_STORAGE --query 'nameAvailable' -o tsv)
+          if [ "$STORAGE_EXISTS" = "true" ]; then
+            az storage account create \
+              --name $BACKEND_STORAGE \
+              --resource-group $BACKEND_RG \
+              --location $LOCATION \
+              --sku Standard_LRS \
+              --kind StorageV2 \
+              --encryption-services blob
+          else
+            echo "Storage account $BACKEND_STORAGE already exists."
+          fi
 
-          # Get Storage Account Key
+          # Get storage key
           ACCOUNT_KEY=$(az storage account keys list \
             --resource-group $BACKEND_RG \
             --account-name $BACKEND_STORAGE \
@@ -87,25 +91,28 @@ jobs:
             --account-name $BACKEND_STORAGE \
             --account-key $ACCOUNT_KEY || echo "Container exists"
 
-          # Write dynamic backend.tf
-          cat > backend.tf <<EOL
-          terraform {
-            backend "azurerm" {
-              resource_group_name  = "$BACKEND_RG"
-              storage_account_name = "$BACKEND_STORAGE"
-              container_name       = "$BACKEND_CONTAINER"
-              key                  = "terraform.tfstate"
-            }
-          }
-          EOL
+          # Write backend.tf only if it doesn't exist
+          if [ ! -f backend.tf ]; then
+            cat > backend.tf <<EOL
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "$BACKEND_RG"
+    storage_account_name = "$BACKEND_STORAGE"
+    container_name       = "$BACKEND_CONTAINER"
+    key                  = "terraform.tfstate"
+  }
+}
+EOL
+          fi
 
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Validate
+      - name: Terraform Validate (only for apply)
+        if: ${{ github.event.inputs.action == 'apply' }}
         run: terraform validate
 
-      - name: Terraform Plan / Destroy Logic
+      - name: Terraform Plan / Apply / Destroy
         run: |
           if [ "${{ github.event.inputs.action }}" == "apply" ]; then
             echo "✅ Applying Terraform..."
