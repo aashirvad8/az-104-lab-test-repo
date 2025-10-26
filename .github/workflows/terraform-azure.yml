@@ -30,7 +30,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Azure Login using OIDC
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -43,10 +43,7 @@ jobs:
           terraform_version: 1.9.5
 
       - name: Terraform Init
-        run: terraform init -backend-config="resource_group_name=rg-terraform-backend" \
-                             -backend-config="storage_account_name=tfstatebackendstore" \
-                             -backend-config="container_name=tfstate" \
-                             -backend-config="key=azurevm.terraform.tfstate"
+        run: terraform init
 
       - name: Terraform Validate
         run: terraform validate
