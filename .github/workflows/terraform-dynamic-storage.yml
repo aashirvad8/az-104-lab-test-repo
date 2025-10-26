@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./terraform-resources
+        working-directory: ./resources
 
     steps:
       - uses: actions/checkout@v4
