@@ -110,11 +110,14 @@ jobs:
       # ----------------------------
       - name: Terraform Init (Remote Backend)
         run: |
+          echo "Reinitializing Terraform with remote Azure backend..."
+          rm -f backend-bootstrap.tf
           terraform init -reconfigure \
             -backend-config="resource_group_name=${TF_BACKEND_RG}" \
             -backend-config="storage_account_name=${TF_BACKEND_SA}" \
             -backend-config="container_name=${TF_BACKEND_CONTAINER}" \
             -backend-config="key=terraform.tfstate"
+
 
       # ----------------------------
       # 9️⃣ Terraform Plan and Apply/Destroy logic
