@@ -1,0 +1,67 @@
+name: "Terraform Azure Deployment"
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Choose the Terraform action to perform"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
+
+env:
+  TF_WORKING_DIR: ./terraform-resources
+  TF_BACKEND_RG: "tfstate-rg"                  # Change as per your setup
+  TF_BACKEND_STORAGE_ACCOUNT: "tfstatebackend001"  # Change as per your Azure Storage
+  TF_BACKEND_CONTAINER: "tfstate"              # Change as per your container name
+  TF_BACKEND_KEY: "azurevm.terraform.tfstate"  # The state file name
+
+jobs:
+  terraform:
+    name: "Terraform Deploy to Azure"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5   # Adjust to your preferred version
+
+      - name: Azure Login via Service Principal
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ env.TF_BACKEND_RG }}" \
+            -backend-config="storage_account_name=${{ env.TF_BACKEND_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ env.TF_BACKEND_CONTAINER }}" \
+            -backend-config="key=${{ env.TF_BACKEND_KEY }}"
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform Apply
+        if: ${{ github.event.inputs.action == 'apply' }}
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Terraform Destroy
+        if: ${{ github.event.inputs.action == 'destroy' }}
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform destroy -auto-approve
