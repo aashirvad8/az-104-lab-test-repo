@@ -1,48 +1,9 @@
-name: "Terraform Azure Deployment (OIDC)"
-
-on:
-  workflow_dispatch:
-    inputs:
-      action:
-        description: "Choose Terraform action"
-        required: true
-        default: "apply"
-        type: choice
-        options:
-          - apply
-          - destroy
-
-      backend_rg:
-        description: "Resource group for Terraform state backend"
-        required: true
-        default: "tfstate-rg"
-
-      backend_storage_account:
-        description: "Storage account for Terraform state backend"
-        required: true
-        default: "tfstatejayesh4890patil1"
-
-      backend_container:
-        description: "Blob container for Terraform state backend"
-        required: true
-        default: "tfstate"
-
-      backend_key:
-        description: "State file name (key)"
-        required: true
-        default: "terraform.tfstate"
-
-permissions:
-  id-token: write   # For OIDC authentication
-  contents: read
-
-env:
-  TF_WORKING_DIR: ./terraform-resources
-
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    name: "Terraform Plan & Deploy"
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout Repository
@@ -60,30 +21,32 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Terraform Init (dynamic backend)
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Set Azure environment variables for Terraform
+        run: |
+          echo "ARM_USE_OIDC=true" >> $GITHUB_ENV
+          echo "ARM_CLIENT_ID=${{ vars.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=${{ vars.AZURE_TENANT_ID }}" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=${{ vars.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        working-directory: ./terraform-resources
         run: |
           terraform init \
-            -backend-config="resource_group_name=${{ github.event.inputs.backend_rg }}" \
-            -backend-config="storage_account_name=${{ github.event.inputs.backend_storage_account }}" \
-            -backend-config="container_name=${{ github.event.inputs.backend_container }}" \
-            -backend-config="key=${{ github.event.inputs.backend_key }}"
-
-      - name: Terraform Validate
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform validate
+            -backend-config="resource_group_name=tfstate-rg" \
+            -backend-config="storage_account_name=tfstatejayesh4890patil1" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=terraform.tfstate"
 
       - name: Terraform Plan
-        id: plan
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform plan -input=false -out=tfplan
+        working-directory: ./terraform-resources
+        run: terraform plan
 
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform apply -auto-approve tfplan
+        working-directory: ./terraform-resources
+        run: terraform apply -auto-approve
 
       - name: Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
-        working-directory: ${{ env.TF_WORKING_DIR }}
+        working-directory: ./terraform-resources
         run: terraform destroy -auto-approve
