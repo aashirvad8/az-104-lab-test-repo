@@ -2,10 +2,10 @@ subscription_id = "d0866d00-eb92-4775-bfeb-d6fc94acd94e"
 location        = "eastus"
 rg_Name         = "Demo-Test"
 
-# Backend
-backend_rg_name        = "tfstate-rg-new"
-backend_sa_name        = "tfstatejayesh4890patil12"
-backend_container_name = "tfstate"
+# # Backend
+# backend_rg_name        = "tfstate-rg-new"
+# backend_sa_name        = "tfstatejayesh4890patil12"
+# backend_container_name = "tfstate"
 
 # VNET / Subnets
 vnet_Name          = "vnet-terraform-modulesdev"
