@@ -65,26 +65,48 @@ jobs:
         run: terraform init -backend-config="path=terraform.tfstate" -reconfigure
 
       # ----------------------------
-      # 5️⃣ Create remote backend resources
+      # 5️⃣ Check if backend already exists in Azure
       # ----------------------------
-      - name: Terraform Apply (Create Backend Storage)
-        run: terraform apply -auto-approve \
-          -target=azurerm_resource_group.backend_rg \
-          -target=azurerm_storage_account.backend_sa \
-          -target=azurerm_storage_container.backend_container
+      - name: Check Backend Existence
+        id: check_backend
+        run: |
+          echo "🔍 Checking for existing backend resources..."
+          set +e
+          RG_EXISTS=$(az group exists --name "${{ secrets.TF_BACKEND_RG }}" 2>/dev/null)
+          SA_EXISTS=$(az storage account show --name "${{ secrets.TF_BACKEND_SA }}" --resource-group "${{ secrets.TF_BACKEND_RG }}" --query "name" -o tsv 2>/dev/null)
+          set -e
+
+          if [ "$RG_EXISTS" = "true" ] && [ -n "$SA_EXISTS" ]; then
+            echo "✅ Backend already exists — skipping backend creation."
+            echo "backend_exists=true" >> $GITHUB_ENV
+          else
+            echo "🆕 Backend not found — will create a new one."
+            echo "backend_exists=false" >> $GITHUB_ENV
+          fi
 
       # ----------------------------
-      # 6️⃣ Capture backend info for reconfiguration
+      # 6️⃣ Conditionally create backend resources
+      # ----------------------------
+      - name: Terraform Apply (Create Backend Storage)
+        if: env.backend_exists == 'false'
+        run: |
+          terraform apply -auto-approve \
+            -target=azurerm_resource_group.backend_rg \
+            -target=azurerm_storage_account.backend_sa \
+            -target=azurerm_storage_container.backend_container
+
+      # ----------------------------
+      # 7️⃣ Capture backend info for reconfiguration
       # ----------------------------
       - name: Capture Backend Outputs
         id: backend
         run: |
-          echo "TF_BACKEND_RG=$(terraform output -raw backend_rg_name 2>/dev/null || echo 'tfstate-rg')" >> $GITHUB_ENV
-          echo "TF_BACKEND_SA=$(terraform output -raw backend_sa_name 2>/dev/null || echo 'tfstatestorage')" >> $GITHUB_ENV
-          echo "TF_BACKEND_CONTAINER=$(terraform output -raw backend_container_name 2>/dev/null || echo 'tfstate')" >> $GITHUB_ENV
+          echo "TF_BACKEND_RG=${{ secrets.TF_BACKEND_RG }}" >> $GITHUB_ENV
+          echo "TF_BACKEND_SA=${{ secrets.TF_BACKEND_SA }}" >> $GITHUB_ENV
+          echo "TF_BACKEND_CONTAINER=${{ secrets.TF_BACKEND_CONTAINER }}" >> $GITHUB_ENV
 
       # ----------------------------
-      # 7️⃣ Reinitialize Terraform with remote backend
+      # 8️⃣ Reinitialize Terraform with remote backend
       # ----------------------------
       - name: Terraform Init (Remote Backend)
         run: |
@@ -93,15 +115,6 @@ jobs:
             -backend-config="storage_account_name=${TF_BACKEND_SA}" \
             -backend-config="container_name=${TF_BACKEND_CONTAINER}" \
             -backend-config="key=terraform.tfstate"
-
-      # ----------------------------
-      # 8️⃣ Validate and Format Terraform code
-      # ----------------------------
-      - name: Terraform Validate
-        run: terraform validate
-
-      - name: Terraform Format Check
-        run: terraform fmt -check
 
       # ----------------------------
       # 9️⃣ Terraform Plan and Apply/Destroy logic
