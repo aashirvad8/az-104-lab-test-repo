@@ -1,4 +1,4 @@
-name: "Terraform Apply / Destroy"
+name: "Terraform Dynamic Backend - Apply or Destroy Infra"
 
 on:
   workflow_dispatch:
@@ -11,6 +11,9 @@ on:
         options:
           - apply
           - destroy
+  push:
+    branches:
+      - main
 
 permissions:
   id-token: write
@@ -32,13 +35,13 @@ jobs:
 
     steps:
       # ----------------------------
-      # 1️⃣ Checkout the repo
+      # 1️⃣ Checkout the repository
       # ----------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # ----------------------------
-      # 2️⃣ Authenticate to Azure using OIDC
+      # 2️⃣ Authenticate with Azure
       # ----------------------------
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -56,56 +59,83 @@ jobs:
           terraform_version: 1.9.5
 
       # ----------------------------
-      # 4️⃣ Initialize local backend (bootstrap mode)
+      # 4️⃣ Initialize Terraform locally (bootstrap backend)
       # ----------------------------
-      - name: Terraform Init (Remote Backend)
-        run: terraform init -reconfigure
+      - name: Terraform Init (Bootstrap Local Backend)
+        run: terraform init -backend-config="path=terraform.tfstate" -reconfigure
 
       # ----------------------------
-      # 5️⃣ Create Backend Resources (Storage Account, Container)
+      # 5️⃣ Create remote backend resources
       # ----------------------------
-      - name: Terraform Apply (Backend Storage)
-        run: terraform apply -auto-approve -target=azurerm_storage_account.backend_sa -target=azurerm_storage_container.backend_container
+      - name: Terraform Apply (Create Backend Storage)
+        run: terraform apply -auto-approve \
+          -target=azurerm_resource_group.backend_rg \
+          -target=azurerm_storage_account.backend_sa \
+          -target=azurerm_storage_container.backend_container
 
       # ----------------------------
-      # 6️⃣ Re-initialize with Remote Backend (Azure Storage)
+      # 6️⃣ Capture backend info for reconfiguration
+      # ----------------------------
+      - name: Capture Backend Outputs
+        id: backend
+        run: |
+          echo "TF_BACKEND_RG=$(terraform output -raw backend_rg_name 2>/dev/null || echo 'tfstate-rg')" >> $GITHUB_ENV
+          echo "TF_BACKEND_SA=$(terraform output -raw backend_sa_name 2>/dev/null || echo 'tfstatestorage')" >> $GITHUB_ENV
+          echo "TF_BACKEND_CONTAINER=$(terraform output -raw backend_container_name 2>/dev/null || echo 'tfstate')" >> $GITHUB_ENV
+
+      # ----------------------------
+      # 7️⃣ Reinitialize Terraform with remote backend
       # ----------------------------
       - name: Terraform Init (Remote Backend)
         run: |
           terraform init -reconfigure \
-            -backend-config="resource_group_name=${{ secrets.TF_BACKEND_RG }}" \
-            -backend-config="storage_account_name=${{ secrets.TF_BACKEND_SA }}" \
-            -backend-config="container_name=${{ secrets.TF_BACKEND_CONTAINER }}" \
+            -backend-config="resource_group_name=${TF_BACKEND_RG}" \
+            -backend-config="storage_account_name=${TF_BACKEND_SA}" \
+            -backend-config="container_name=${TF_BACKEND_CONTAINER}" \
             -backend-config="key=terraform.tfstate"
 
       # ----------------------------
-      # 7️⃣ Validate and Format Check
+      # 8️⃣ Validate and Format Terraform code
       # ----------------------------
-      - name: Terraform Format Check
-        run: terraform fmt -check
-
       - name: Terraform Validate
         run: terraform validate
 
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
       # ----------------------------
-      # 8️⃣ Terraform Plan & Apply / Destroy
+      # 9️⃣ Terraform Plan and Apply/Destroy logic
       # ----------------------------
       - name: Terraform Plan and Apply/Destroy
         run: |
-          case "${{ github.event.inputs.action }}" in
-            apply)
-              echo "Running terraform plan..."
-              terraform plan -out=tfplan
-              echo "Applying Terraform changes..."
-              terraform apply -auto-approve tfplan
-              ;;
-            destroy)
-              echo "Running terraform destroy..."
-              terraform plan -destroy -out=tfplan
-              terraform apply -auto-approve tfplan
-              ;;
-            *)
-              echo "Invalid action specified"
-              exit 1
-              ;;
-          esac
+          ACTION="${{ github.event.inputs.action }}"
+          if [ "$ACTION" = "apply" ]; then
+            echo "Planning Terraform apply..."
+            terraform plan -out=tfplan
+            echo "Applying Terraform configuration..."
+            terraform apply -auto-approve tfplan
+          elif [ "$ACTION" = "destroy" ]; then
+            echo "Planning Terraform destroy..."
+            terraform plan -destroy -out=tfplan
+            echo "Destroying Terraform-managed resources..."
+            terraform apply -auto-approve tfplan
+          else
+            echo "Invalid action: $ACTION"
+            exit 1
+          fi
+
+      # ----------------------------
+      # 🔟 Upload Terraform Plan for review (optional)
+      # ----------------------------
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: ./terraform-resources/tfplan
+
+      # ----------------------------
+      # 1️⃣1️⃣ Cleanup local bootstrap state (optional)
+      # ----------------------------
+      - name: Cleanup Local Bootstrap State
+        if: always()
+        run: rm -f terraform.tfstate terraform.tfstate.backup
