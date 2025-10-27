@@ -31,47 +31,81 @@ jobs:
         working-directory: ./terraform-resources
 
     steps:
-      - uses: actions/checkout@v4
+      # ----------------------------
+      # 1️⃣ Checkout the repo
+      # ----------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: azure/login@v2
+      # ----------------------------
+      # 2️⃣ Authenticate to Azure using OIDC
+      # ----------------------------
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - uses: hashicorp/setup-terraform@v3
+      # ----------------------------
+      # 3️⃣ Setup Terraform
+      # ----------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
 
-      - name: Terraform Init (Bootstrap Local Backend)
-        run: terraform init
+      # ----------------------------
+      # 4️⃣ Initialize local backend (bootstrap mode)
+      # ----------------------------
+      - name: Terraform Init (Local Backend)
+        run: terraform init -backend-config="backend-bootstrap.tf"
 
-      - name: Terraform Apply Backend Storage
-        run: terraform apply -auto-approve
+      # ----------------------------
+      # 5️⃣ Create Backend Resources (Storage Account, Container)
+      # ----------------------------
+      - name: Terraform Apply (Backend Storage)
+        run: terraform apply -auto-approve -target=azurerm_storage_account.backend_sa -target=azurerm_storage_container.backend_container
 
+      # ----------------------------
+      # 6️⃣ Re-initialize with Remote Backend (Azure Storage)
+      # ----------------------------
       - name: Terraform Init (Remote Backend)
         run: |
-          cat > backend.tf <<EOL
-          terraform {
-          backend "azurerm" {
-          resource_group_name  = "tfstate-rg"
-          storage_account_name = "tfstatejayesh4890patil1"
-          container_name       = "tfstate"
-          key                  = "terraform.tfstate"
-                            }
-                    }
-          EOL
-          terraform init -reconfigure
+          terraform init -reconfigure \
+            -backend-config="resource_group_name=${{ secrets.TF_BACKEND_RG }}" \
+            -backend-config="storage_account_name=${{ secrets.TF_BACKEND_SA }}" \
+            -backend-config="container_name=${{ secrets.TF_BACKEND_CONTAINER }}" \
+            -backend-config="key=terraform.tfstate"
 
-      - name: Terraform Plan / Apply / Destroy
+      # ----------------------------
+      # 7️⃣ Validate and Format Check
+      # ----------------------------
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      # ----------------------------
+      # 8️⃣ Terraform Plan & Apply / Destroy
+      # ----------------------------
+      - name: Terraform Plan and Apply/Destroy
         run: |
-          if [ "${{ github.event.inputs.action }}" == "apply" ]; then
-            terraform plan -out=tfplan
-            terraform apply -auto-approve tfplan
-          elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
-            terraform plan -destroy -out=tfplan
-            terraform destroy -auto-approve
-          else
-            echo "Invalid action"
-            exit 1
-          fi
+          case "${{ github.event.inputs.action }}" in
+            apply)
+              echo "Running terraform plan..."
+              terraform plan -out=tfplan
+              echo "Applying Terraform changes..."
+              terraform apply -auto-approve tfplan
+              ;;
+            destroy)
+              echo "Running terraform destroy..."
+              terraform plan -destroy -out=tfplan
+              terraform apply -auto-approve tfplan
+              ;;
+            *)
+              echo "Invalid action specified"
+              exit 1
+              ;;
+          esac
