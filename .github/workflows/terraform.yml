@@ -6,10 +6,9 @@ on:
       action:
         description: "Choose Terraform action"
         required: true
-        default: "plan"
+        default: "apply"
         type: choice
         options:
-          - plan
           - apply
           - destroy
       resource_group_name:
@@ -70,11 +69,6 @@ jobs:
             -backend-config="storage_account_name=${{ github.event.inputs.storage_account_name }}" \
             -backend-config="container_name=${{ github.event.inputs.container_name }}" \
             -backend-config="key=${{ github.event.inputs.state_key }}"
-
-      - name: 🧩 Terraform Plan
-        if: ${{ github.event.inputs.action == 'plan' }}
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform plan -input=false
 
       - name: 🚀 Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
