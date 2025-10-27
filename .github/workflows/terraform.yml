@@ -1,10 +1,10 @@
-name: "Terraform Azure Deployment"
+name: "Terraform Azure Deployment (OIDC)"
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Choose the Terraform action to perform"
+        description: "Choose Terraform action"
         required: true
         default: "apply"
         type: choice
@@ -12,17 +12,37 @@ on:
           - apply
           - destroy
 
+      backend_rg:
+        description: "Resource group for Terraform state backend"
+        required: true
+        default: "tfstate-rg"
+
+      backend_storage_account:
+        description: "Storage account for Terraform state backend"
+        required: true
+        default: "tfstatejayesh4890patil1"
+
+      backend_container:
+        description: "Blob container for Terraform state backend"
+        required: true
+        default: "tfstate"
+
+      backend_key:
+        description: "State file name (key)"
+        required: true
+        default: "terraform.tfstate"
+
+permissions:
+  id-token: write   # For OIDC authentication
+  contents: read
+
 env:
   TF_WORKING_DIR: ./terraform-resources
-  TF_BACKEND_RG: "tfstate-rg"                  # Change as per your setup
-  TF_BACKEND_STORAGE_ACCOUNT: "tfstatebackend001"  # Change as per your Azure Storage
-  TF_BACKEND_CONTAINER: "tfstate"              # Change as per your container name
-  TF_BACKEND_KEY: "azurevm.terraform.tfstate"  # The state file name
 
 jobs:
   terraform:
-    name: "Terraform Deploy to Azure"
     runs-on: ubuntu-latest
+    name: "Terraform Plan & Deploy"
 
     steps:
       - name: Checkout Repository
@@ -31,21 +51,23 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.8.5   # Adjust to your preferred version
+          terraform_version: 1.8.5
 
-      - name: Azure Login via Service Principal
+      - name: Azure Login via OIDC
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Terraform Init
+      - name: Terraform Init (dynamic backend)
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           terraform init \
-            -backend-config="resource_group_name=${{ env.TF_BACKEND_RG }}" \
-            -backend-config="storage_account_name=${{ env.TF_BACKEND_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ env.TF_BACKEND_CONTAINER }}" \
-            -backend-config="key=${{ env.TF_BACKEND_KEY }}"
+            -backend-config="resource_group_name=${{ github.event.inputs.backend_rg }}" \
+            -backend-config="storage_account_name=${{ github.event.inputs.backend_storage_account }}" \
+            -backend-config="container_name=${{ github.event.inputs.backend_container }}" \
+            -backend-config="key=${{ github.event.inputs.backend_key }}"
 
       - name: Terraform Validate
         working-directory: ${{ env.TF_WORKING_DIR }}

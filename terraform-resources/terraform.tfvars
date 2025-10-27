@@ -2,7 +2,7 @@ subscription_id = "d0866d00-eb92-4775-bfeb-d6fc94acd94e"
 
 ## VNET - SUBNET
 rg_Name            = "Demo-Test"
-location           = "eastus2"
+location           = "eastus"
 vnet_Name          = "vnet-terraform-modulesdev-eus2"
 vnet_Address       = "178.29.192.0/20"
 subnet_NameList    = ["snet-aks-terraform-modulesdev-eus2", "snet-agw-terraform-modulesdev-eus2", "snet-shared-terraform-modulesdev-eus2", "snet-vm-terraform-modulesdev-eus2", "GatewaySubnet"]
