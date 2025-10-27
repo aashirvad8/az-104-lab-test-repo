@@ -59,7 +59,7 @@ jobs:
       # 4️⃣ Initialize local backend (bootstrap mode)
       # ----------------------------
       - name: Terraform Init (Local Backend)
-        run: terraform init -backend-config="backend-bootstrap.tf"
+        run: terraform init
 
       # ----------------------------
       # 5️⃣ Create Backend Resources (Storage Account, Container)
