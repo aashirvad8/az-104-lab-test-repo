@@ -20,7 +20,7 @@ resource "azurerm_storage_account" "backend_sa" {
   location                 = azurerm_resource_group.backend_rg.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
-  kind                     = "StorageV2"
+  #kind                     = "StorageV2"
 }
 
 resource "azurerm_storage_container" "backend_container" {
