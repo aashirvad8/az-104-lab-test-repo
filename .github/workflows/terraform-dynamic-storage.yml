@@ -58,8 +58,8 @@ jobs:
       # ----------------------------
       # 4️⃣ Initialize local backend (bootstrap mode)
       # ----------------------------
-      - name: Terraform Init (Local Backend)
-        run: terraform init
+      - name: Terraform Init (Remote Backend)
+        run: terraform init -reconfigure
 
       # ----------------------------
       # 5️⃣ Create Backend Resources (Storage Account, Container)
