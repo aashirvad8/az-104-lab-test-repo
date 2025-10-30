@@ -3,7 +3,7 @@ resource "azurerm_public_ip" "vm_pip" {
   resource_group_name = var.rg_Name
   location            = var.location
   allocation_method   = var.pip_allocation
-  sku                 = "Basic"
+  sku                 = "Standard"
 }
 
 resource "azurerm_network_interface" "vm_nic" {

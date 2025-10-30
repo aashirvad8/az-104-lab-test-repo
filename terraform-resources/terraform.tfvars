@@ -8,7 +8,7 @@ vnet_Address       = "178.29.192.0/20"
 subnet_NameList    = ["snet-aks-terraform-modulesdev-eus", "snet-agw-terraform-modulesdev-eus", "snet-shared-terraform-modulesdev-eus", "snet-vm-terraform-modulesdev-eus", "GatewaySubnet"]
 subnet_AddressList = ["178.29.192.0/26", "178.29.192.64/26", "178.29.192.128/26", "178.29.192.192/26", "178.29.193.0/26"]
 vm_pip                 = "public_ip_win"
-pip_allocation         = "Dynamic"
+pip_allocation         = "Static"
 vm_nic                 = "win_vm_nic"
 ip_configuration       = "ip_config"
 
