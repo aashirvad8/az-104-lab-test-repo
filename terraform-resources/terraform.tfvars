@@ -3,9 +3,9 @@ subscription_id = "8a430bad-846b-42a4-b674-138436f67a00"
 ## VNET - SUBNET
 rg_Name            = "Demo-Test"
 location           = "eastus"
-vnet_Name          = "vnet-terraform-modulesdev-eus2"
+vnet_Name          = "vnet-terraform-modulesdev-eus"
 vnet_Address       = "178.29.192.0/20"
-subnet_NameList    = ["snet-aks-terraform-modulesdev-eus2", "snet-agw-terraform-modulesdev-eus2", "snet-shared-terraform-modulesdev-eus2", "snet-vm-terraform-modulesdev-eus2", "GatewaySubnet"]
+subnet_NameList    = ["snet-aks-terraform-modulesdev-eus", "snet-agw-terraform-modulesdev-eus", "snet-shared-terraform-modulesdev-eus", "snet-vm-terraform-modulesdev-eus", "GatewaySubnet"]
 subnet_AddressList = ["178.29.192.0/26", "178.29.192.64/26", "178.29.192.128/26", "178.29.192.192/26", "178.29.193.0/26"]
 vm_pip                 = "public_ip_win"
 pip_allocation         = "Dynamic"
