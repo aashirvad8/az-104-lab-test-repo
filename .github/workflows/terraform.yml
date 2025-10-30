@@ -18,7 +18,7 @@ on:
       storage_account_name:
         description: "Azure Storage Account name for backend"
         required: true
-        default: "tfstatejayesh4890patil1"
+        default: "tfstatestgacfortesting"
       container_name:
         description: "Azure Blob container name for state file"
         required: true
