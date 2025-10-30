@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Azure Lab Management</title>
+  <style>
+    body { font-family: Arial; text-align: center; margin-top: 60px; }
+    input { margin: 8px; padding: 8px; width: 250px; }
+    button { margin: 10px; padding: 10px 20px; cursor: pointer; }
+    #response { margin-top: 20px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Azure Lab Portal</h1>
+  <input type="text" id="firstName" placeholder="First Name" /><br/>
+  <input type="text" id="lastName" placeholder="Last Name" /><br/>
+  <input type="email" id="email" placeholder="Email ID" /><br/>
+
+  <button onclick="triggerWorkflow('apply')" style="background-color: green; color: white;">Create Lab</button>
+  <button onclick="triggerWorkflow('destroy')" style="background-color: red; color: white;">Destroy Lab</button>
+
+  <div id="response"></div>
+
+  <script>
+    async function triggerWorkflow(action) {
+      const firstName = document.getElementById('firstName').value;
+      const lastName = document.getElementById('lastName').value;
+      const email = document.getElementById('email').value;
+
+      const responseDiv = document.getElementById('response');
+      responseDiv.innerText = "⏳ Triggering workflow...";
+
+      const response = await fetch('/trigger-workflow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName, lastName, email, action })
+      });
+
+      const result = await response.json();
+      responseDiv.innerText = result.message || result.error;
+    }
+  </script>
+</body>
+</html>
