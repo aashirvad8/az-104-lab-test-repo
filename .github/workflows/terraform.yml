@@ -1,4 +1,4 @@
-name: "Terraform Plan / Apply / Destroy with Azure OIDC"
+name: "Terraform Apply/Destroy with Azure OIDC"
 
 on:
   workflow_dispatch:
@@ -6,10 +6,9 @@ on:
       action:
         description: "Choose Terraform action"
         required: true
-        default: "plan"
+        default: "apply"
         type: choice
         options:
-          - plan
           - apply
           - destroy
       resource_group_name:
@@ -30,16 +29,14 @@ on:
         default: "terraform.tfstate"
 
 permissions:
-  id-token: write
+  id-token: write    # ✅ Required for Azure OIDC login
   contents: read
 
-env:
-  TF_WORKING_DIR: ./terraform-resources
-
 jobs:
-  terraform-plan:
-    name: 🧭 Terraform Plan
+  terraform:
     runs-on: ubuntu-latest
+    env:
+      TF_WORKING_DIR: ./terraform-resources
 
     steps:
       - name: 📥 Checkout Repository
@@ -57,27 +54,18 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: 🌍 Set Azure Environment Variables for Terraform
+      - name: 🌍 Set Azure environment variables for Terraform
         run: |
           echo "ARM_USE_OIDC=true" >> $GITHUB_ENV
           echo "ARM_CLIENT_ID=${{ vars.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
           echo "ARM_TENANT_ID=${{ vars.AZURE_TENANT_ID }}" >> $GITHUB_ENV
           echo "ARM_SUBSCRIPTION_ID=${{ vars.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
-          echo 'plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"' > ~/.terraformrc
-
-      - name: 💾 Cache Terraform Plugins & Modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.terraform.d/plugin-cache
-            ${{ env.TF_WORKING_DIR }}/.terraform
-          key: terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
-          restore-keys: terraform-
 
       - name: 🧱 Terraform Init (with Azure backend)
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          terraform init \
+          echo "🔑 Using state file key: ${{ github.event.inputs.state_key }}"
+          terraform init -reconfigure \
             -backend-config="resource_group_name=${{ github.event.inputs.resource_group_name }}" \
             -backend-config="storage_account_name=${{ github.event.inputs.storage_account_name }}" \
             -backend-config="container_name=${{ github.event.inputs.container_name }}" \
@@ -91,73 +79,31 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform validate
 
-      - name: 📜 Terraform Plan
-        if: ${{ github.event.inputs.action == 'plan' }}
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform plan -input=false -out=tfplan
-
-      - name: 💾 Save Plan Artifact
-        if: ${{ github.event.inputs.action == 'plan' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-plan
-          path: ${{ env.TF_WORKING_DIR }}/tfplan
-
-
-  terraform-apply-destroy:
-    name: 🚀 Terraform Apply or Destroy
-    needs: terraform-plan
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.action != 'plan' }}
-
-    steps:
-      - name: 📥 Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: ⚙️ Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.5
-
-      - name: 🔐 Azure Login via OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: 🌍 Set Azure Environment Variables for Terraform
-        run: |
-          echo "ARM_USE_OIDC=true" >> $GITHUB_ENV
-          echo "ARM_CLIENT_ID=${{ vars.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
-          echo "ARM_TENANT_ID=${{ vars.AZURE_TENANT_ID }}" >> $GITHUB_ENV
-          echo "ARM_SUBSCRIPTION_ID=${{ vars.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
-          echo 'plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"' > ~/.terraformrc
-
-      - name: 💾 Restore Terraform Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.terraform.d/plugin-cache
-            ${{ env.TF_WORKING_DIR }}/.terraform
-          key: terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
-          restore-keys: terraform-
-
-      - name: 🧱 Terraform Init (with Azure backend)
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=${{ github.event.inputs.resource_group_name }}" \
-            -backend-config="storage_account_name=${{ github.event.inputs.storage_account_name }}" \
-            -backend-config="container_name=${{ github.event.inputs.container_name }}" \
-            -backend-config="key=${{ github.event.inputs.state_key }}"
-
       - name: 🚀 Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform apply -auto-approve -parallelism=20 -input=false
+        run: |
+          echo "🚀 Starting Terraform Apply..."
+          terraform apply -auto-approve -input=false -parallelism=20
+          echo "✅ Terraform Apply completed successfully!"
 
       - name: 💣 Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform destroy -auto-approve -parallelism=20 -input=false
+        run: |
+          echo "💣 Starting Terraform Destroy..."
+          terraform destroy -auto-approve -input=false -parallelism=20
+          echo "✅ Terraform Destroy completed successfully!"
+
+          sleep 5
+
+      - name: 🧹 Cleanup Terraform State File (Post-Destroy)
+        if: ${{ github.event.inputs.action == 'destroy' }}
+        run: |
+          echo "🧹 Deleting remote state file: ${{ github.event.inputs.state_key }}"
+          az storage blob delete \
+            --account-name ${{ github.event.inputs.storage_account_name }} \
+            --container-name ${{ github.event.inputs.container_name }} \
+            --name ${{ github.event.inputs.state_key }} \
+            --auth-mode login || echo "⚠️ Skipped blob deletion (possibly already deleted)"
+          echo "✅ Cleanup complete!"

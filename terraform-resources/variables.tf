@@ -26,6 +26,6 @@ variable "vm_os_disk_strg_type" { type = string }
 variable "vm_os_disk_caching" { type = string }
 
 variable "email_prefix" {
-  description = "Prefix derived from email"
   type        = string
+  description = "Prefix derived from email for unique resource naming"
 }
