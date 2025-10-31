@@ -1,5 +1,5 @@
 resource "azurerm_resource_group" "rg" {
-  name     = "${var.email_prefix}-rg"
+  name     = "${var.email_prefix}-${var.rg_Name}"
   location = var.location
 }
 
@@ -7,7 +7,7 @@ resource "azurerm_resource_group" "rg" {
 
 module "vnet01" {
   source             = "../terraform-modules/network"
-  vnet_Name          = "${var.email_prefix}-vnet"
+  vnet_Name          = "${var.email_prefix}-${var.vnet_Name}"
   rg_Name            = azurerm_resource_group.rg.name
   location           = azurerm_resource_group.rg.location
   vnet_Address       = var.vnet_Address
@@ -25,7 +25,7 @@ module "winvm" {
   pip_allocation       = var.pip_allocation
   vm_nic               = var.vm_nic
   ip_configuration     = var.ip_configuration
-  vm_name              = var.vm_name
+  vm_name              = "${var.email_prefix}-${var.vm_name}"
   vm_size              = var.vm_size
   vm_username          = var.vm_username
   vm_password          = var.vm_password
