@@ -13,7 +13,7 @@ vm_nic                 = "win_vm_nic"
 ip_configuration       = "ip_config"
 
 ### Windows Virtual Machine Deployment
-vm_name                = "win-terra-vm"
+vm_name                = "sicert-test-vm"
 vm_size                = "Standard_B2s"
 vm_username            = "AdminUser"
 vm_password            = "Admin@12356"

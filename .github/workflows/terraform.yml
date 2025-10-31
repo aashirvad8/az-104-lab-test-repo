@@ -70,6 +70,14 @@ jobs:
             -backend-config="container_name=${{ github.event.inputs.container_name }}" \
             -backend-config="key=${{ github.event.inputs.state_key }}"
 
+      - name: 🧾 Terraform Format Check
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform fmt -check
+
+      - name: ✅ Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate
+
       - name: 🚀 Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
