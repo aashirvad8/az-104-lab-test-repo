@@ -1,5 +1,5 @@
 resource "azurerm_resource_group" "rg" {
-  name     = var.rg_Name
+  name     = "${var.email_prefix}-rg"
   location = var.location
 }
 
@@ -7,7 +7,7 @@ resource "azurerm_resource_group" "rg" {
 
 module "vnet01" {
   source             = "../terraform-modules/network"
-  vnet_Name          = var.vnet_Name
+  vnet_Name          = "${var.email_prefix}-vnet"
   rg_Name            = azurerm_resource_group.rg.name
   location           = azurerm_resource_group.rg.location
   vnet_Address       = var.vnet_Address

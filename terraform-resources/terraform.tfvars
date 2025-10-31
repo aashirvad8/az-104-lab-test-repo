@@ -1,9 +1,9 @@
 subscription_id = "8a430bad-846b-42a4-b674-138436f67a00"
 
 ## VNET - SUBNET
-rg_Name            = "Demo-Test"
+rg_Name = "test123-rg"
 location           = "eastus"
-vnet_Name          = "vnet-terraform-modulesdev-eus"
+vnet_Name = "test123-vnet"
 vnet_Address       = "178.29.192.0/20"
 subnet_NameList    = ["snet-aks-terraform-modulesdev-eus", "snet-agw-terraform-modulesdev-eus", "snet-shared-terraform-modulesdev-eus", "snet-vm-terraform-modulesdev-eus", "GatewaySubnet"]
 subnet_AddressList = ["178.29.192.0/26", "178.29.192.64/26", "178.29.192.128/26", "178.29.192.192/26", "178.29.193.0/26"]
@@ -13,7 +13,7 @@ vm_nic             = "win_vm_nic"
 ip_configuration   = "ip_config"
 
 ### Windows Virtual Machine Deployment
-vm_name              = "sicert-test-vm"
+vm_name = "test123-vm"
 vm_size              = "Standard_B2s"
 vm_username          = "AdminUser"
 vm_password          = "Admin@12356"

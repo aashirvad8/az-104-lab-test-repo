@@ -24,3 +24,8 @@ variable "vm_image_sku" { type = string }
 variable "vm_image_version" { type = string }
 variable "vm_os_disk_strg_type" { type = string }
 variable "vm_os_disk_caching" { type = string }
+
+variable "email_prefix" {
+  description = "Prefix derived from email"
+  type        = string
+}
