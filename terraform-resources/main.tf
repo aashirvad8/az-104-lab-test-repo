@@ -7,33 +7,30 @@ variable "email_prefix" {
 }
 
 ###############################################
-# Try to find existing Resource Group
+# Try to find existing Resource Group (optional)
 ###############################################
 data "azurerm_resource_group" "existing" {
-  name = var.rg_Name
-  count = try(length(var.rg_Name), 0) > 0 ? 1 : 0
-
-  # Ignore errors if it doesn't exist
-  # (Terraform will just create it)
-  lifecycle {
-    postcondition {
-      condition     = true
-      error_message = ""
-    }
-  }
+  count = 1
+  name  = var.rg_Name
 }
 
+# We’ll use a try() expression later so Terraform doesn’t fail
+# if the RG doesn’t exist yet.
+
 ###############################################
-# Create RG only if not found
+# Create Resource Group if not found
 ###############################################
 resource "azurerm_resource_group" "rg" {
-  count    = length(data.azurerm_resource_group.existing) > 0 ? 0 : 1
+  count    = try(data.azurerm_resource_group.existing[0].name, null) == null ? 1 : 0
   name     = var.rg_Name
   location = var.location
 }
 
 locals {
-  effective_rg_name = length(data.azurerm_resource_group.existing) > 0 ? data.azurerm_resource_group.existing[0].name : azurerm_resource_group.rg[0].name
+  effective_rg_name = try(
+    data.azurerm_resource_group.existing[0].name,
+    azurerm_resource_group.rg[0].name
+  )
 }
 
 ###############################################
