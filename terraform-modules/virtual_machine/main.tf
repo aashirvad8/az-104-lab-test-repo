@@ -1,3 +1,4 @@
+
 resource "azurerm_public_ip" "vm_pip" {
   name                = var.vm_pip
   resource_group_name = var.rg_Name

@@ -1,3 +1,4 @@
+
 variable "location" { type = string }
 variable "rg_Name" { type = string }
 variable "vnet_Name" { type = string }

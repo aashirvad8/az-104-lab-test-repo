@@ -1,3 +1,4 @@
+
 variable "vm_pip" { type = string }
 variable "rg_Name" { type = string }
 variable "location" { type = string }

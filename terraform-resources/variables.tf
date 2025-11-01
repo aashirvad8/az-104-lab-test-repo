@@ -1,3 +1,4 @@
+
 ## Subscription ID, Resource Group and Location set. These are kept universal in this code. ####
 variable "subscription_id" { type = string }
 variable "location" { type = string }
@@ -25,7 +26,3 @@ variable "vm_image_version" { type = string }
 variable "vm_os_disk_strg_type" { type = string }
 variable "vm_os_disk_caching" { type = string }
 
-variable "email_prefix" {
-  type        = string
-  description = "Prefix derived from email for unique resource naming"
-}

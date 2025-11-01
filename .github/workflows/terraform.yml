@@ -1,40 +1,89 @@
-name: Terraform Apply/Destroy
+name: "Terraform Apply/Destroy with Azure OIDC"
 
 on:
-  repository_dispatch:
-    types: [apply-lab, destroy-lab]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Choose Terraform action"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
+      resource_group_name:
+        description: "Azure Storage Account Resource Group for backend"
+        required: true
+        default: "tfstate-rg"
+      storage_account_name:
+        description: "Azure Storage Account name for backend"
+        required: true
+        default: "tfstatestgacfortesting"
+      container_name:
+        description: "Azure Blob container name for state file"
+        required: true
+        default: "tfstate"
+      state_key:
+        description: "State file name (key)"
+        required: true
+        default: "terraform.tfstate"
 
-env:
-  TF_WORKING_DIR: ./AZURE_VM_TERRAFORM/terraform-resources
-  ARM_USE_OIDC: true
-  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+permissions:
+  id-token: write    # ✅ Required for OIDC
+  contents: read
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
+    env:
+      TF_WORKING_DIR: ./terraform-resources
 
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v3
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+      - name: ⚙️ Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.6
+          terraform_version: 1.8.5
 
-      - name: Initialize Terraform Backend
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform init -reconfigure
+      - name: 🔐 Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Apply or Destroy
+      - name: 🌍 Set Azure environment variables for Terraform
+        run: |
+          echo "ARM_USE_OIDC=true" >> $GITHUB_ENV
+          echo "ARM_CLIENT_ID=${{ vars.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=${{ vars.AZURE_TENANT_ID }}" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=${{ vars.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
+
+      - name: 🧱 Terraform Init (with Azure backend)
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          if [ "${{ github.event.action }}" == "apply" ]; then
-            echo "🚀 Applying Lab..."
-            terraform apply -auto-approve -input=false
-          else
-            echo "🛑 Destroying Lab..."
-            terraform destroy -auto-approve
-          fi
+          terraform init \
+            -backend-config="resource_group_name=${{ github.event.inputs.resource_group_name }}" \
+            -backend-config="storage_account_name=${{ github.event.inputs.storage_account_name }}" \
+            -backend-config="container_name=${{ github.event.inputs.container_name }}" \
+            -backend-config="key=${{ github.event.inputs.state_key }}"
+
+      - name: 🧾 Terraform Format Check
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform fmt -check
+
+      - name: ✅ Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate
+
+      - name: 🚀 Terraform Apply
+        if: ${{ github.event.inputs.action == 'apply' }}
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -auto-approve -input=false
+
+      - name: 💣 Terraform Destroy
+        if: ${{ github.event.inputs.action == 'destroy' }}
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform destroy -auto-approve -input=false

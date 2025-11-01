@@ -1,3 +1,4 @@
+
 output "vnet_Name" {
   value = azurerm_virtual_network.wec_vnet.name
 }
