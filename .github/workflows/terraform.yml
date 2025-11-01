@@ -11,10 +11,14 @@ on:
         options:
           - apply
           - destroy
-      resource_group_name:
-        description: "Azure Storage Account Resource Group for backend"
+      email_prefix:
+        description: "Email prefix (before @)"
         required: true
-        default: "tfstate-rg"
+        default: "demo"
+      resource_group_name:
+        description: "Azure Resource Group Name"
+        required: true
+        default: "demo-rg"
       storage_account_name:
         description: "Azure Storage Account name for backend"
         required: true
@@ -29,7 +33,7 @@ on:
         default: "terraform.tfstate"
 
 permissions:
-  id-token: write    # ✅ Required for OIDC
+  id-token: write
   contents: read
 
 jobs:
@@ -37,6 +41,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TF_WORKING_DIR: ./terraform-resources
+      # These are dynamically injected for Terraform
+      TF_VAR_email_prefix: ${{ github.event.inputs.email_prefix }}
+      TF_VAR_rg_Name: ${{ github.event.inputs.resource_group_name }}
+      TF_VAR_vnet_Name: ${{ github.event.inputs.email_prefix }}-vnet
+      TF_VAR_location: eastus
 
     steps:
       - name: 📥 Checkout Repository
@@ -61,7 +70,7 @@ jobs:
           echo "ARM_TENANT_ID=${{ vars.AZURE_TENANT_ID }}" >> $GITHUB_ENV
           echo "ARM_SUBSCRIPTION_ID=${{ vars.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
 
-      - name: 🧱 Terraform Init (with Azure backend)
+      - name: 🧱 Terraform Init (Azure backend)
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           terraform init \
