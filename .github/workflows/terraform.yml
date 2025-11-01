@@ -1,4 +1,4 @@
-name: "Terraform - Azure VM Deployment"
+name: "Terraform - Azure VM Deployment (OIDC + Preflight Check)"
 
 on:
   # Manual trigger with input for apply or destroy
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write   # required for OIDC auth
+      id-token: write   # required for OIDC authentication
       contents: read
 
     steps:
@@ -30,7 +30,40 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Step 2: Authenticate to Azure using OIDC
+      # Step 2: Preflight validation - ensure secrets exist
+      - name: Validate Required Secrets
+        run: |
+          echo "🔍 Checking required environment variables..."
+          missing=""
+          for secret in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+            if [ -z "${{ secrets[$secret] }}" ]; then
+              echo "❌ Missing secret: $secret"
+              missing="yes"
+            else
+              echo "✅ Found secret: $secret"
+            fi
+          done
+
+          if [ "$missing" = "yes" ]; then
+            echo "⛔ One or more required secrets are missing. Please add them under repository settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          echo "✅ All required secrets are present."
+
+      # Step 3: Verify that OIDC token can be fetched
+      - name: Validate OIDC Token Availability
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+        run: |
+          echo "🔑 Checking if GitHub OIDC token can be requested..."
+          if [ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
+            echo "❌ OIDC token request URL not found. Check 'permissions: id-token: write' in your workflow."
+            exit 1
+          fi
+          echo "✅ OIDC permissions confirmed. Token URL is available."
+
+      # Step 4: Azure Login via OIDC
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -38,35 +71,35 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Step 3: Setup Terraform
+      # Step 5: Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.5  # Adjust if needed
+          terraform_version: 1.9.5  # Adjust as needed
 
-      # Step 4: Terraform Init
+      # Step 6: Terraform Init
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init -input=false
 
-      # Step 5: Terraform Validate
+      # Step 7: Terraform Validate
       - name: Terraform Validate
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform validate
 
-      # Step 6: Terraform Plan (always runs)
+      # Step 8: Terraform Plan (always runs first)
       - name: Terraform Plan
         id: plan
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform plan -input=false -out=tfplan
 
-      # Step 7: Terraform Apply (if chosen)
+      # Step 9: Terraform Apply (conditional)
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform apply -auto-approve tfplan
 
-      # Step 8: Terraform Destroy (if chosen)
+      # Step 10: Terraform Destroy (conditional)
       - name: Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
