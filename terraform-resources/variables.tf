@@ -1,3 +1,7 @@
+variable "email_prefix" {
+  description = "Prefix derived from user's email (used for naming RG, VNET, etc.)"
+  type        = string
+}
 
 ## Subscription ID, Resource Group and Location set. These are kept universal in this code. ####
 variable "subscription_id" { type = string }
