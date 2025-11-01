@@ -12,25 +12,13 @@ on:
           - apply
           - destroy
       email_prefix:
-        description: "Email prefix (before @)"
+        description: "Email prefix (used for RG & VNET name)"
         required: true
         default: "demo"
-      resource_group_name:
-        description: "Azure Resource Group Name"
+      location:
+        description: "Azure region"
         required: true
-        default: "tfstate-rg"
-      storage_account_name:
-        description: "Azure Storage Account name for backend"
-        required: true
-        default: "tfstatestgacfortesting"
-      container_name:
-        description: "Azure Blob container name for state file"
-        required: true
-        default: "tfstate"
-      state_key:
-        description: "State file name (key)"
-        required: true
-        default: "terraform.tfstate"
+        default: "eastus"
 
 permissions:
   id-token: write
@@ -41,11 +29,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TF_WORKING_DIR: ./terraform-resources
-      # These are dynamically injected for Terraform
-      TF_VAR_email_prefix: ${{ github.event.inputs.email_prefix }}
-      TF_VAR_rg_Name: ${{ github.event.inputs.resource_group_name }}
-      TF_VAR_vnet_Name: ${{ github.event.inputs.email_prefix }}-vnet
-      TF_VAR_location: eastus
 
     steps:
       - name: 📥 Checkout Repository
@@ -70,14 +53,14 @@ jobs:
           echo "ARM_TENANT_ID=${{ vars.AZURE_TENANT_ID }}" >> $GITHUB_ENV
           echo "ARM_SUBSCRIPTION_ID=${{ vars.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
 
-      - name: 🧱 Terraform Init (Azure backend)
+      - name: 🧱 Terraform Init (Static Backend)
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           terraform init \
-            -backend-config="resource_group_name=${{ github.event.inputs.resource_group_name }}" \
-            -backend-config="storage_account_name=${{ github.event.inputs.storage_account_name }}" \
-            -backend-config="container_name=${{ github.event.inputs.container_name }}" \
-            -backend-config="key=${{ github.event.inputs.state_key }}"
+            -backend-config="resource_group_name=tfstate-rg" \
+            -backend-config="storage_account_name=tfstatestgacfortesting" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=${{ github.event.inputs.email_prefix }}-terraform.tfstate"
 
       - name: 🧾 Terraform Format Check
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -90,9 +73,15 @@ jobs:
       - name: 🚀 Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform apply -auto-approve -input=false
+        run: |
+          terraform apply -auto-approve -input=false \
+            -var="email_prefix=${{ github.event.inputs.email_prefix }}" \
+            -var="location=${{ github.event.inputs.location }}"
 
       - name: 💣 Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform destroy -auto-approve -input=false
+        run: |
+          terraform destroy -auto-approve -input=false \
+            -var="email_prefix=${{ github.event.inputs.email_prefix }}" \
+            -var="location=${{ github.event.inputs.location }}"
