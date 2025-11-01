@@ -1,91 +1,72 @@
-name: "Terraform Apply/Destroy with Azure OIDC"
+name: "Terraform - Azure VM Deployment"
 
 on:
+  # Manual trigger with an input parameter
   workflow_dispatch:
     inputs:
       action:
-        description: "Choose Terraform action"
+        description: "Terraform action to perform"
         required: true
         default: "apply"
         type: choice
         options:
           - apply
           - destroy
-      email_prefix:
-        description: "Email prefix (used for RG & VNET name)"
-        required: true
-        default: "demo"
-      location:
-        description: "Azure region"
-        required: true
-        default: "eastus"
 
-permissions:
-  id-token: write
-  contents: read
+env:
+  TF_WORKING_DIR: ./terraform-resources
 
 jobs:
   terraform:
+    name: "Terraform ${{ github.event.inputs.action }}"
     runs-on: ubuntu-latest
-    env:
-      TF_WORKING_DIR: ./terraform-resources
+
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC authentication to Azure
 
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.5
-
-      - name: 🔐 Azure Login via OIDC
+      # Configure Azure Login using GitHub OIDC (recommended way)
+      - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: 🌍 Set Azure environment variables for Terraform
-        run: |
-          echo "ARM_USE_OIDC=true" >> $GITHUB_ENV
-          echo "ARM_CLIENT_ID=${{ vars.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
-          echo "ARM_TENANT_ID=${{ vars.AZURE_TENANT_ID }}" >> $GITHUB_ENV
-          echo "ARM_SUBSCRIPTION_ID=${{ vars.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
+      # Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5  # You can adjust as needed
 
-      - name: 🧾 Inject dynamic terraform.tfvars
+      # Initialize Terraform backend
+      - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          echo "email_prefix = \"${{ github.event.inputs.email_prefix }}\"" > terraform.tfvars
-          echo "location     = \"${{ github.event.inputs.location }}\"" >> terraform.tfvars
-          echo "subscription_id = \"${{ vars.AZURE_SUBSCRIPTION_ID }}\"" >> terraform.tfvars
-          echo "✅ Generated terraform.tfvars:"
-          cat terraform.tfvars
+        run: terraform init -input=false
 
-      - name: 🧱 Terraform Init (Backend per user)
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=tfstate-rg" \
-            -backend-config="storage_account_name=tfstatestgacfortesting" \
-            -backend-config="container_name=tfstate" \
-            -backend-config="key=${{ github.event.inputs.email_prefix }}-terraform.tfstate"
-
-      - name: ✅ Terraform Validate
+      # Validate configuration
+      - name: Terraform Validate
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform validate
 
-      - name: 🚀 Terraform Apply
+      # Plan phase (always runs first)
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform plan -input=false -out=tfplan
+
+      # Apply phase (only if chosen)
+      - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform apply -auto-approve -input=false
+        run: terraform apply -auto-approve tfplan
 
-      - name: 💣 Terraform Destroy
+      # Destroy phase (only if chosen)
+      - name: Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform destroy -auto-approve -input=false
-
-      - name: 🧹 Cleanup generated tfvars
-        if: always()
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: rm -f terraform.tfvars
+        run: terraform destroy -auto-approve
