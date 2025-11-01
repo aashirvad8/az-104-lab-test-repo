@@ -32,11 +32,13 @@ jobs:
 
       # Step 2: Preflight validation - ensure secrets exist
       - name: Validate Required Secrets
+        shell: bash
         run: |
           echo "🔍 Checking required environment variables..."
-          missing=""
+          missing="no"
           for secret in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
-            if [ -z "${{ secrets[$secret] }}" ]; then
+            value="${{ secrets[secret] }}"
+            if [ -z "$value" ]; then
               echo "❌ Missing secret: $secret"
               missing="yes"
             else
@@ -52,12 +54,10 @@ jobs:
 
       # Step 3: Verify OIDC Token permissions
       - name: Validate OIDC Token Availability
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+        shell: bash
         run: |
           echo "🔑 Checking if GitHub OIDC token can be requested..."
-          if [ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL}" ]; then
             echo "❌ OIDC token request URL not found. Check 'permissions: id-token: write' in your workflow."
             exit 1
           fi
@@ -75,7 +75,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.5  # Adjust if needed
+          terraform_version: 1.9.5
 
       # Step 6: Terraform Init
       - name: Terraform Init
