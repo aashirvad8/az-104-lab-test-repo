@@ -1,90 +1,39 @@
-terraform {
-  required_version = ">= 1.3.0"
-
-  backend "azurerm" {
-    resource_group_name  = "tfstate-rg"
-    storage_account_name = "tfstatestgacfortesting"
-    container_name       = "tfstate"
-    key                  = "${var.email_prefix}-terraform.tfstate"
-  }
-
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = ">= 3.70.0"
-    }
-  }
-}
-
-provider "azurerm" {
-  features {}
-}
-
-# Variables
-variable "email_prefix" {
-  description = "Prefix for resource names"
-  type        = string
-}
-
-variable "location" {
-  description = "Azure region"
-  type        = string
-  default     = "eastus"
-}
-
-# Resource Group
 resource "azurerm_resource_group" "rg" {
-  name     = "${var.email_prefix}-rg"
+  name     = var.rg_Name
   location = var.location
 }
 
-# VNET + Subnet
-resource "azurerm_virtual_network" "vnet" {
-  name                = "${var.email_prefix}-vnet"
-  address_space       = ["10.0.0.0/16"]
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+############# VNET & SUBNET Deployment Code #############
+
+module "vnet01" {
+  source             = "../terraform-modules/network"
+  vnet_Name          = var.vnet_Name
+  rg_Name            = azurerm_resource_group.rg.name
+  location           = azurerm_resource_group.rg.location
+  vnet_Address       = var.vnet_Address
+  subnet_NameList    = var.subnet_NameList
+  subnet_AddressList = var.subnet_AddressList
 }
 
-resource "azurerm_subnet" "subnet" {
-  name                 = "${var.email_prefix}-subnet"
-  resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = ["10.0.1.0/24"]
-}
+######### Azure Windows Virtual Machine deployment #########
 
-# Network Interface
-resource "azurerm_network_interface" "nic" {
-  name                = "${var.email_prefix}-nic"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.subnet.id
-    private_ip_address_allocation = "Dynamic"
-  }
-}
-
-# Windows VM
-resource "azurerm_windows_virtual_machine" "winvm" {
-  name                = "${var.email_prefix}-winvm"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  size                = "Standard_B2s"
-  admin_username      = "azureuser"
-  admin_password      = "ComplexPassw0rd!" # replace with GitHub secret
-  network_interface_ids = [azurerm_network_interface.nic.id]
-
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
-  }
-
-  source_image_reference {
-    publisher = "MicrosoftWindowsServer"
-    offer     = "WindowsServer"
-    sku       = "2019-Datacenter"
-    version   = "latest"
-  }
+module "winvm" {
+  source               = "../terraform-modules/virtual_machine"
+  vm_pip               = var.vm_pip
+  rg_Name              = azurerm_resource_group.rg.name
+  location             = azurerm_resource_group.rg.location
+  pip_allocation       = var.pip_allocation
+  vm_nic               = var.vm_nic
+  ip_configuration     = var.ip_configuration
+  vm_name              = var.vm_name
+  vm_size              = var.vm_size
+  vm_username          = var.vm_username
+  vm_password          = var.vm_password
+  vm_image_publisher   = var.vm_image_publisher
+  vm_image_offer       = var.vm_image_offer
+  vm_image_sku         = var.vm_image_sku
+  vm_image_version     = var.vm_image_version
+  vm_os_disk_strg_type = var.vm_os_disk_strg_type
+  vm_os_disk_caching   = var.vm_os_disk_caching
+  vm_subnetid          = module.vnet01.subnet_Id[3]
 }
