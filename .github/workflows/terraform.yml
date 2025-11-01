@@ -37,7 +37,7 @@ jobs:
       - name: ⚙️ Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.8.5
+          terraform_version: 1.9.5
 
       - name: 🔐 Azure Login via OIDC
         uses: azure/login@v2
@@ -76,7 +76,9 @@ jobs:
         run: |
           terraform apply -auto-approve -input=false \
             -var="email_prefix=${{ github.event.inputs.email_prefix }}" \
-            -var="location=${{ github.event.inputs.location }}"
+            -var="location=${{ github.event.inputs.location }}" \
+            -var="rg_Name=${{ github.event.inputs.email_prefix }}-rg" \
+            -var="vnet_Name=${{ github.event.inputs.email_prefix }}-vnet"
 
       - name: 💣 Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
@@ -84,4 +86,6 @@ jobs:
         run: |
           terraform destroy -auto-approve -input=false \
             -var="email_prefix=${{ github.event.inputs.email_prefix }}" \
-            -var="location=${{ github.event.inputs.location }}"
+            -var="location=${{ github.event.inputs.location }}" \
+            -var="rg_Name=${{ github.event.inputs.email_prefix }}-rg" \
+            -var="vnet_Name=${{ github.event.inputs.email_prefix }}-vnet"
