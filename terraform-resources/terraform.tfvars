@@ -1,4 +1,3 @@
-
 subscription_id = "8a430bad-846b-42a4-b674-138436f67a00"
 
 ## VNET - SUBNET
