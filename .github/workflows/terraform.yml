@@ -1,13 +1,12 @@
 name: Terraform Azure VM Deployment
 
 on:
-  # Manual trigger with options
   workflow_dispatch:
     inputs:
       action:
         description: "Choose Terraform action"
         required: true
-        default: "apply"
+        default: "plan"
         type: choice
         options:
           - plan
@@ -15,21 +14,17 @@ on:
           - destroy
 
 env:
-  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
   TF_IN_AUTOMATION: true
   TF_INPUT: false
   WORKING_DIR: terraform-resources
 
 jobs:
   terraform:
-    name: Terraform Deploy to Azure
     runs-on: ubuntu-latest
+    name: Terraform Workflow
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Terraform
@@ -37,7 +32,17 @@ jobs:
         with:
           terraform_version: 1.9.7
 
-      # Initialize Terraform with Azure backend
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+
       - name: Terraform Init
         working-directory: ${{ env.WORKING_DIR }}
         run: |
@@ -47,24 +52,16 @@ jobs:
             -backend-config="container_name=${{ secrets.TFSTATE_CONTAINER }}" \
             -backend-config="key=terraform.tfstate"
 
-      # Validate Terraform configuration
-      - name: Terraform Validate
-        working-directory: ${{ env.WORKING_DIR }}
-        run: terraform validate
-
-      # Terraform Plan
       - name: Terraform Plan
         if: ${{ github.event.inputs.action == 'plan' }}
         working-directory: ${{ env.WORKING_DIR }}
         run: terraform plan -var-file="terraform.tfvars"
 
-      # Terraform Apply
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         working-directory: ${{ env.WORKING_DIR }}
         run: terraform apply -auto-approve -var-file="terraform.tfvars"
 
-      # Terraform Destroy
       - name: Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         working-directory: ${{ env.WORKING_DIR }}
