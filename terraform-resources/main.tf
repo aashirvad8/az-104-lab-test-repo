@@ -1,18 +1,18 @@
 terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 3.0"
-    }
-  }
-
   required_version = ">= 1.3.0"
 
   backend "azurerm" {
-    resource_group_name   = "tfstate-rg"                      # must exist beforehand
-    storage_account_name  = "tfstatestgacfortesting"         # must exist beforehand
-    container_name        = "tfstate"
-    key                   = "${var.email_prefix}-terraform.tfstate"
+    resource_group_name  = "tfstate-rg"
+    storage_account_name = "tfstatestgacfortesting"
+    container_name       = "tfstate"
+    key                  = "${var.email_prefix}-terraform.tfstate"
+  }
+
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = ">= 3.70.0"
+    }
   }
 }
 
@@ -23,15 +23,16 @@ provider "azurerm" {
 # Variables
 variable "email_prefix" {
   type        = string
-  description = "Prefix used for resource names"
+  description = "Prefix for resource names"
 }
 
 variable "location" {
   type        = string
+  description = "Azure region"
   default     = "eastus"
 }
 
-# Resource Group
+# Create Resource Group if not exists
 resource "azurerm_resource_group" "rg" {
   name     = "${var.email_prefix}-rg"
   location = var.location
@@ -53,11 +54,40 @@ resource "azurerm_subnet" "subnet" {
   address_prefixes     = ["10.0.1.0/24"]
 }
 
-# Optional: Windows VM Module (example)
-module "winvm" {
-  source              = "../terraform-modules/virtual_machine"
-  vm_name_prefix      = var.email_prefix
+# Example Windows VM
+resource "azurerm_windows_virtual_machine" "winvm" {
+  name                = "${var.email_prefix}-winvm"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  size                = "Standard_B2s"
+  admin_username      = "azureuser"
+  admin_password      = "ComplexPassw0rd!" # replace with secure secret in production
+  network_interface_ids = [
+    azurerm_network_interface.nic.id
+  ]
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "MicrosoftWindowsServer"
+    offer     = "WindowsServer"
+    sku       = "2019-Datacenter"
+    version   = "latest"
+  }
+}
+
+# Network Interface
+resource "azurerm_network_interface" "nic" {
+  name                = "${var.email_prefix}-nic"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  subnet_id           = azurerm_subnet.subnet.id
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.subnet.id
+    private_ip_address_allocation = "Dynamic"
+  }
 }
