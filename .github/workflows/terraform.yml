@@ -1,132 +1,71 @@
-name: "Terraform - Azure VM Deployment (OIDC + Preflight + Artifacts)"
+name: Terraform Azure VM Deployment
 
 on:
-  # Manual trigger with input for apply or destroy
+  # Manual trigger with options
   workflow_dispatch:
     inputs:
       action:
-        description: "Select Terraform action to perform"
+        description: "Choose Terraform action"
         required: true
         default: "apply"
         type: choice
         options:
+          - plan
           - apply
           - destroy
 
 env:
-  TF_WORKING_DIR: ./terraform-resources
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  TF_IN_AUTOMATION: true
+  TF_INPUT: false
+  WORKING_DIR: terraform-resources
 
 jobs:
   terraform:
-    name: "Terraform ${{ github.event.inputs.action }}"
+    name: Terraform Deploy to Azure
     runs-on: ubuntu-latest
 
-    permissions:
-      id-token: write   # required for OIDC authentication
-      contents: read
-
     steps:
-      # Step 1: Checkout repository
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Preflight validation - ensure secrets exist
-      - name: Validate Required Secrets
-        shell: bash
-        run: |
-          echo "🔍 Checking required environment variables..."
-          missing="no"
-          for secret in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
-            value="${{ secrets[secret] }}"
-            if [ -z "$value" ]; then
-              echo "❌ Missing secret: $secret"
-              missing="yes"
-            else
-              echo "✅ Found secret: $secret"
-            fi
-          done
-
-          if [ "$missing" = "yes" ]; then
-            echo "⛔ One or more required secrets are missing. Please add them under repository settings → Secrets and variables → Actions."
-            exit 1
-          fi
-          echo "✅ All required secrets are present."
-
-      # Step 3: Verify OIDC Token permissions
-      - name: Validate OIDC Token Availability
-        shell: bash
-        run: |
-          echo "🔑 Checking if GitHub OIDC token can be requested..."
-          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL}" ]; then
-            echo "❌ OIDC token request URL not found. Check 'permissions: id-token: write' in your workflow."
-            exit 1
-          fi
-          echo "✅ OIDC permissions confirmed."
-
-      # Step 4: Azure Login via OIDC
-      - name: Azure Login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      # Step 5: Setup Terraform
-      - name: Setup Terraform
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.5
+          terraform_version: 1.9.7
 
-      # Step 6: Terraform Init
+      # Initialize Terraform with Azure backend
       - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform init -input=false
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TFSTATE_RG }}" \
+            -backend-config="storage_account_name=${{ secrets.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ secrets.TFSTATE_CONTAINER }}" \
+            -backend-config="key=terraform.tfstate"
 
-      # Step 7: Terraform Validate
+      # Validate Terraform configuration
       - name: Terraform Validate
-        working-directory: ${{ env.TF_WORKING_DIR }}
+        working-directory: ${{ env.WORKING_DIR }}
         run: terraform validate
 
-      # Step 8: Terraform Plan
+      # Terraform Plan
       - name: Terraform Plan
-        id: plan
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          terraform plan -input=false -out=tfplan | tee terraform_plan.log
+        if: ${{ github.event.inputs.action == 'plan' }}
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform plan -var-file="terraform.tfvars"
 
-      # Step 9: Upload Terraform Plan & Logs as Artifacts
-      - name: Upload Terraform Plan and Logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-plan-${{ github.event.inputs.action }}
-          path: |
-            ${{ env.TF_WORKING_DIR }}/tfplan
-            ${{ env.TF_WORKING_DIR }}/terraform_plan.log
-          if-no-files-found: warn
-
-      # Step 10: Terraform Apply (conditional)
+      # Terraform Apply
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          echo "🚀 Applying Terraform plan..."
-          terraform apply -auto-approve tfplan | tee terraform_apply.log
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform apply -auto-approve -var-file="terraform.tfvars"
 
-      # Step 11: Terraform Destroy (conditional)
+      # Terraform Destroy
       - name: Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          echo "💣 Destroying Terraform-managed resources..."
-          terraform destroy -auto-approve | tee terraform_destroy.log
-
-      # Step 12: Upload Apply/Destroy Logs (optional but useful)
-      - name: Upload Apply/Destroy Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-${{ github.event.inputs.action }}-logs
-          path: |
-            ${{ env.TF_WORKING_DIR }}/terraform_apply.log
-            ${{ env.TF_WORKING_DIR }}/terraform_destroy.log
-          if-no-files-found: ignore
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform destroy -auto-approve -var-file="terraform.tfvars"
