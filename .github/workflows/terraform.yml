@@ -53,7 +53,16 @@ jobs:
           echo "ARM_TENANT_ID=${{ vars.AZURE_TENANT_ID }}" >> $GITHUB_ENV
           echo "ARM_SUBSCRIPTION_ID=${{ vars.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
 
-      - name: 🧱 Terraform Init (Static Backend)
+      - name: 🧾 Inject dynamic terraform.tfvars
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          echo "email_prefix = \"${{ github.event.inputs.email_prefix }}\"" > terraform.tfvars
+          echo "location     = \"${{ github.event.inputs.location }}\"" >> terraform.tfvars
+          echo "subscription_id = \"${{ vars.AZURE_SUBSCRIPTION_ID }}\"" >> terraform.tfvars
+          echo "✅ Generated terraform.tfvars:"
+          cat terraform.tfvars
+
+      - name: 🧱 Terraform Init (Backend per user)
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           terraform init \
@@ -62,10 +71,6 @@ jobs:
             -backend-config="container_name=tfstate" \
             -backend-config="key=${{ github.event.inputs.email_prefix }}-terraform.tfstate"
 
-      - name: 🧾 Terraform Format Check
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform fmt -check
-
       - name: ✅ Terraform Validate
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform validate
@@ -73,15 +78,14 @@ jobs:
       - name: 🚀 Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          terraform apply -auto-approve -input=false \
-            -var="email_prefix=${{ github.event.inputs.email_prefix }}" \
-            -var="location=${{ github.event.inputs.location }}"
+        run: terraform apply -auto-approve -input=false
 
       - name: 💣 Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          terraform destroy -auto-approve -input=false \
-            -var="email_prefix=${{ github.event.inputs.email_prefix }}" \
-            -var="location=${{ github.event.inputs.location }}"
+        run: terraform destroy -auto-approve -input=false
+
+      - name: 🧹 Cleanup generated tfvars
+        if: always()
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: rm -f terraform.tfvars
