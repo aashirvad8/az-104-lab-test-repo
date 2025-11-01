@@ -1,11 +1,11 @@
 name: "Terraform - Azure VM Deployment"
 
 on:
-  # Manual trigger with an input parameter
+  # Manual trigger with input for apply or destroy
   workflow_dispatch:
     inputs:
       action:
-        description: "Terraform action to perform"
+        description: "Select Terraform action to perform"
         required: true
         default: "apply"
         type: choice
@@ -22,50 +22,51 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
+      id-token: write   # required for OIDC auth
       contents: read
-      id-token: write  # Required for OIDC authentication to Azure
 
     steps:
+      # Step 1: Checkout repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Configure Azure Login using GitHub OIDC (recommended way)
-      - name: Azure Login
+      # Step 2: Authenticate to Azure using OIDC
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Setup Terraform
+      # Step 3: Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.5  # You can adjust as needed
+          terraform_version: 1.9.5  # Adjust if needed
 
-      # Initialize Terraform backend
+      # Step 4: Terraform Init
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init -input=false
 
-      # Validate configuration
+      # Step 5: Terraform Validate
       - name: Terraform Validate
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform validate
 
-      # Plan phase (always runs first)
+      # Step 6: Terraform Plan (always runs)
       - name: Terraform Plan
         id: plan
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform plan -input=false -out=tfplan
 
-      # Apply phase (only if chosen)
+      # Step 7: Terraform Apply (if chosen)
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform apply -auto-approve tfplan
 
-      # Destroy phase (only if chosen)
+      # Step 8: Terraform Destroy (if chosen)
       - name: Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         working-directory: ${{ env.TF_WORKING_DIR }}
