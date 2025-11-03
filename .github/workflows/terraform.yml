@@ -44,6 +44,12 @@ env:
   TF_INPUT: false
   WORKING_DIR: terraform-resources
 
+  # Static backend configuration (your storage)
+  TFSTATE_RG: tfstate-rg
+  TFSTATE_STORAGE_ACCOUNT: tfstatestgacfortesting
+  TFSTATE_CONTAINER: tfstate
+  TFSTATE_KEY: terraform.tfstate
+
 jobs:
   terraform:
     runs-on: ubuntu-latest
@@ -76,16 +82,16 @@ jobs:
           echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
           echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
 
-      - name: Terraform Init
+      - name: Terraform Init (Static Backend)
         working-directory: ${{ env.WORKING_DIR }}
         run: |
           terraform init \
-            -backend-config="resource_group_name=${{ secrets.TFSTATE_RG }}" \
-            -backend-config="storage_account_name=${{ secrets.TFSTATE_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ secrets.TFSTATE_CONTAINER }}" \
-            -backend-config="key=terraform.tfstate"
+            -backend-config="resource_group_name=${{ env.TFSTATE_RG }}" \
+            -backend-config="storage_account_name=${{ env.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ env.TFSTATE_CONTAINER }}" \
+            -backend-config="key=${{ env.TFSTATE_KEY }}"
 
-      # Convert comma-separated subnet inputs into lists
+      # Convert comma-separated subnet inputs into Terraform-compatible lists
       - name: Prepare Dynamic Subnet Inputs
         id: subnet_prep
         run: |
