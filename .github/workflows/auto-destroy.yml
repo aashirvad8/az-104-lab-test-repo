@@ -1,0 +1,64 @@
+name: "Auto Destroy Labs (Nightly)"
+
+on:
+  schedule:
+    # Every night at 00:00 UTC (adjust as needed)
+    - cron: "0 0 * * *"
+
+  workflow_dispatch:    # Allow manual trigger too
+
+env:
+  TF_IN_AUTOMATION: true
+  TF_INPUT: false
+  WORKING_DIR: terraform-resources
+
+  TFSTATE_RG: tfstate-rg
+  TFSTATE_STORAGE_ACCOUNT: tfstatestgacfortesting
+  TFSTATE_CONTAINER: tfstate
+  TFSTATE_KEY: terraform.tfstate
+
+jobs:
+  auto_destroy:
+    name: "Terraform Auto Destroy"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.7
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+
+      - name: Set ARM environment variables
+        run: |
+          echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
+          echo "ARM_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
+
+      - name: Terraform Init (Static Backend)
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ env.TFSTATE_RG }}" \
+            -backend-config="storage_account_name=${{ env.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ env.TFSTATE_CONTAINER }}" \
+            -backend-config="key=${{ env.TFSTATE_KEY }}"
+
+      - name: Terraform Destroy (Auto Cleanup)
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform destroy -auto-approve -var-file="terraform.tfvars"
