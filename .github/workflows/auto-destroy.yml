@@ -1,38 +1,16 @@
-name: "Auto Destroy Labs (Nightly)"
+name: Auto Destroy Labs (Nightly)
 
 on:
   schedule:
-    # Every night at 00:00 UTC (adjust as needed)
     - cron: "0 0 * * *"
-
-  workflow_dispatch:    # Allow manual trigger too
-
-env:
-  TF_IN_AUTOMATION: true
-  TF_INPUT: false
-  WORKING_DIR: terraform-resources
-
-  TFSTATE_RG: tfstate-rg
-  TFSTATE_STORAGE_ACCOUNT: tfstatestgacfortesting
-  TFSTATE_CONTAINER: tfstate
-  TFSTATE_KEY: terraform.tfstate
+  workflow_dispatch:
 
 jobs:
-  auto_destroy:
-    name: "Terraform Auto Destroy"
+  cleanup:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.7
-
-      - name: Azure Login
-        uses: azure/login@v2
+      - uses: azure/login@v2
         with:
           creds: |
             {
@@ -42,36 +20,21 @@ jobs:
               "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
             }
 
-      - name: Set ARM environment variables
+      - name: Destroy All Lab Resource Groups (except protected)
         run: |
-          echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
-          echo "ARM_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}" >> $GITHUB_ENV
-          echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
-          echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
-
-      - name: Terraform Init (Static Backend)
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=${{ env.TFSTATE_RG }}" \
-            -backend-config="storage_account_name=${{ env.TFSTATE_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ env.TFSTATE_CONTAINER }}" \
-            -backend-config="key=${{ env.TFSTATE_KEY }}"
-
-    #   - name: Terraform Destroy (Auto Cleanup)
-    #     working-directory: ${{ env.WORKING_DIR }}
-    #     run: |
-    #       terraform destroy -auto-approve -var-file="terraform.tfvars"
-
-      - name: Destroy All Lab Resource Groups
-        run: |
-          az login --service-principal \
-          -u "${{ secrets.AZURE_CLIENT_ID }}" \
-          -p "${{ secrets.AZURE_CLIENT_SECRET }}" \
-          --tenant "${{ secrets.AZURE_TENANT_ID }}"
-    
-          echo "🔍 Listing all lab resource groups..."
+          PROTECTED_RGS=("shared-infra-rg" "tfstate-rg")
+          echo "🔍 Cleaning up labs..."
           for rg in $(az group list --query "[?contains(name,'-rg')].name" -o tsv); do
-          echo "💣 Deleting resource group: $rg"
-          az group delete --name "$rg" --yes --no-wait
+            SKIP=false
+            for protected in "${PROTECTED_RGS[@]}"; do
+              if [[ "$rg" == "$protected" ]]; then
+                echo "🛑 Skipping protected resource group: $rg"
+                SKIP=true
+                break
+              fi
+            done
+            if [ "$SKIP" = false ]; then
+              echo "💣 Deleting resource group: $rg"
+              az group delete --name "$rg" --yes --no-wait
+            fi
           done
