@@ -41,3 +41,5 @@ vm_image_sku         = "2016-Datacenter"
 vm_image_version     = "latest"
 vm_os_disk_strg_type = "Standard_LRS"
 vm_os_disk_caching   = "ReadWrite"
+vnet_Address    = "10.0.0.0/16"
+subnet_AddressList = ["10.0.1.0/24", "10.0.2.0/24"]
