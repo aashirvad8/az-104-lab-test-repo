@@ -13,7 +13,6 @@ on:
           - apply
           - destroy
 
-      # === Dynamic Azure Inputs ===
       rg_Name:
         description: "Enter Resource Group Name"
         required: true
@@ -29,17 +28,27 @@ on:
         required: true
         default: "vnet-demo"
 
+      vnet_Address:
+        description: "Enter Virtual Network CIDR"
+        required: true
+        default: "10.0.0.0/16"
+
       subnet_NameList:
         description: "Comma-separated list of subnet names"
         required: true
         default: "subnet-1,subnet-2"
+
+      subnet_AddressList:
+        description: "Comma-separated list of subnet CIDRs"
+        required: true
+        default: "10.0.1.0/24,10.0.2.0/24"
 
 env:
   TF_IN_AUTOMATION: true
   TF_INPUT: false
   WORKING_DIR: terraform-resources
 
-  # === Static backend (your Terraform state) ===
+  # Static backend for state storage
   TFSTATE_RG: tfstate-rg
   TFSTATE_STORAGE_ACCOUNT: tfstatestgacfortesting
   TFSTATE_CONTAINER: tfstate
@@ -76,7 +85,6 @@ jobs:
           echo "ARM_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}" >> $GITHUB_ENV
           echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
           echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
-          echo "SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
 
       - name: Terraform Init (Static Backend)
         working-directory: ${{ env.WORKING_DIR }}
@@ -88,20 +96,21 @@ jobs:
             -backend-config="key=${{ env.TFSTATE_KEY }}"
 
       - name: Prepare Dynamic Subnet Inputs
-        id: subnet_prep
         run: |
           echo "subnet_names=$(echo '${{ github.event.inputs.subnet_NameList }}' | tr ',' '\n' | jq -R . | jq -sc .)" >> $GITHUB_ENV
+          echo "subnet_addresses=$(echo '${{ github.event.inputs.subnet_AddressList }}' | tr ',' '\n' | jq -R . | jq -sc .)" >> $GITHUB_ENV
 
       - name: Terraform Plan
         if: ${{ github.event.inputs.action == 'plan' }}
         working-directory: ${{ env.WORKING_DIR }}
         run: |
           terraform plan \
-            -var="subscription_id=${{ env.SUBSCRIPTION_ID }}" \
             -var="rg_Name=${{ github.event.inputs.rg_Name }}" \
             -var="location=${{ github.event.inputs.location }}" \
             -var="vnet_Name=${{ github.event.inputs.vnet_Name }}" \
+            -var="vnet_Address=${{ github.event.inputs.vnet_Address }}" \
             -var='subnet_NameList=${{ env.subnet_names }}' \
+            -var='subnet_AddressList=${{ env.subnet_addresses }}' \
             -var-file="terraform.tfvars"
 
       - name: Terraform Apply
@@ -109,11 +118,12 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
         run: |
           terraform apply -auto-approve \
-            -var="subscription_id=${{ env.SUBSCRIPTION_ID }}" \
             -var="rg_Name=${{ github.event.inputs.rg_Name }}" \
             -var="location=${{ github.event.inputs.location }}" \
             -var="vnet_Name=${{ github.event.inputs.vnet_Name }}" \
+            -var="vnet_Address=${{ github.event.inputs.vnet_Address }}" \
             -var='subnet_NameList=${{ env.subnet_names }}' \
+            -var='subnet_AddressList=${{ env.subnet_addresses }}' \
             -var-file="terraform.tfvars"
 
       - name: Terraform Destroy
@@ -121,9 +131,10 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
         run: |
           terraform destroy -auto-approve \
-            -var="subscription_id=${{ env.SUBSCRIPTION_ID }}" \
             -var="rg_Name=${{ github.event.inputs.rg_Name }}" \
             -var="location=${{ github.event.inputs.location }}" \
             -var="vnet_Name=${{ github.event.inputs.vnet_Name }}" \
+            -var="vnet_Address=${{ github.event.inputs.vnet_Address }}" \
             -var='subnet_NameList=${{ env.subnet_names }}' \
+            -var='subnet_AddressList=${{ env.subnet_addresses }}' \
             -var-file="terraform.tfvars"
