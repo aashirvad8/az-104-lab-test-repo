@@ -58,7 +58,20 @@ jobs:
             -backend-config="container_name=${{ env.TFSTATE_CONTAINER }}" \
             -backend-config="key=${{ env.TFSTATE_KEY }}"
 
-      - name: Terraform Destroy (Auto Cleanup)
-        working-directory: ${{ env.WORKING_DIR }}
+    #   - name: Terraform Destroy (Auto Cleanup)
+    #     working-directory: ${{ env.WORKING_DIR }}
+    #     run: |
+    #       terraform destroy -auto-approve -var-file="terraform.tfvars"
+
+      - name: Destroy All Lab Resource Groups
         run: |
-          terraform destroy -auto-approve -var-file="terraform.tfvars"
+          az login --service-principal \
+          -u "${{ secrets.AZURE_CLIENT_ID }}" \
+          -p "${{ secrets.AZURE_CLIENT_SECRET }}" \
+          --tenant "${{ secrets.AZURE_TENANT_ID }}"
+    
+          echo "🔍 Listing all lab resource groups..."
+          for rg in $(az group list --query "[?contains(name,'-rg')].name" -o tsv); do
+          echo "💣 Deleting resource group: $rg"
+          az group delete --name "$rg" --yes --no-wait
+          done
