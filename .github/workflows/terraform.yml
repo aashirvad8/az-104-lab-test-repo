@@ -48,7 +48,7 @@ env:
   TF_INPUT: false
   WORKING_DIR: terraform-resources
 
-  # Backend configuration for Terraform state
+  # Static backend for state storage
   TFSTATE_RG: tfstate-rg
   TFSTATE_STORAGE_ACCOUNT: tfstatestgacfortesting
   TFSTATE_CONTAINER: tfstate
@@ -60,15 +60,15 @@ jobs:
     name: Terraform Workflow
 
     steps:
-      - name: 🧾 Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Terraform
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.7
 
-      - name: 🔐 Azure Login
+      - name: Azure Login
         uses: azure/login@v2
         with:
           creds: |
@@ -79,14 +79,14 @@ jobs:
               "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
             }
 
-      - name: 🌍 Set Azure environment variables
+      - name: Set ARM environment variables
         run: |
           echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
           echo "ARM_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}" >> $GITHUB_ENV
           echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
           echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
 
-      - name: 🧱 Terraform Init
+      - name: Terraform Init (Static Backend)
         working-directory: ${{ env.WORKING_DIR }}
         run: |
           terraform init \
@@ -95,12 +95,12 @@ jobs:
             -backend-config="container_name=${{ env.TFSTATE_CONTAINER }}" \
             -backend-config="key=${{ env.TFSTATE_KEY }}"
 
-      - name: 🧩 Prepare Dynamic Subnet Inputs
+      - name: Prepare Dynamic Subnet Inputs
         run: |
           echo "subnet_names=$(echo '${{ github.event.inputs.subnet_NameList }}' | tr ',' '\n' | jq -R . | jq -sc .)" >> $GITHUB_ENV
           echo "subnet_addresses=$(echo '${{ github.event.inputs.subnet_AddressList }}' | tr ',' '\n' | jq -R . | jq -sc .)" >> $GITHUB_ENV
 
-      - name: 🔍 Terraform Plan
+      - name: Terraform Plan
         if: ${{ github.event.inputs.action == 'plan' }}
         working-directory: ${{ env.WORKING_DIR }}
         run: |
@@ -113,7 +113,7 @@ jobs:
             -var='subnet_AddressList=${{ env.subnet_addresses }}' \
             -var-file="terraform.tfvars"
 
-      - name: 🚀 Terraform Apply
+      - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' }}
         working-directory: ${{ env.WORKING_DIR }}
         run: |
@@ -126,7 +126,7 @@ jobs:
             -var='subnet_AddressList=${{ env.subnet_addresses }}' \
             -var-file="terraform.tfvars"
 
-      - name: 💣 Terraform Destroy
+      - name: Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         working-directory: ${{ env.WORKING_DIR }}
         run: |

@@ -38,4 +38,3 @@ module "winvm" {
   # ✅ Fix: use last subnet dynamically
   vm_subnetid          = module.vnet01.subnet_Id[length(module.vnet01.subnet_Id) - 1]
 }
-
